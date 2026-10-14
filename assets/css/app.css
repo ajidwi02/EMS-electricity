@@ -1,0 +1,173 @@
+/* ==========================================================================
+   EMS — Energy Management System
+   Industrial Palette: Graphite + Concrete + Signal Amber
+   Minimalist, modern, elegan untuk lingkungan industri
+   ==========================================================================
+
+   COLOR PALETTE (pakai hex ini bila ragu — jangan warna mentah lain):
+   --------------------------------------------------------------------------
+   | Token            | Hex       | Pakai untuk                              |
+   |------------------|-----------|------------------------------------------|
+   | concrete-bg      | #F2F3F0   | background konten (main)                 |
+   | card             | #FFFFFF   | sidebar terang? tidak — card & topbar    |
+   | graphite-950     | #101316   | sidebar dark (bg utama)                  |
+   | graphite-900     | #14171B   | sidebar dark alternatif                  |
+   | graphite-800     | #1E2329   | hover / active item di sidebar           |
+   | graphite-700     | #2A3138   | border di atas dark                      |
+   | ink              | #191C1F   | heading / teks utama di area terang      |
+   | steel-500        | #6B7280   | teks muted / deskripsi                   |
+   | steel-400        | #9AA1AD   | teks sidebar tidak aktif + ikon muted    |
+   | line             | #E3E5E0   | border card di area terang               |
+   | line-dark        | #262C33   | border / separator di sidebar dark       |
+   | signal-amber     | #EAA500   | AKSEN UTAMA: active bar, ikon logo, dot  |
+   | amber-deep       | #B97A0C   | teks di atas bg amber muda               |
+   | amber-soft       | #FFF6DE   | bg badge / highlight hemat               |
+   | moss / ok        | #1A7F4D   | status normal (dot + teks)               |
+   | danger           | #C2410C   | fault / trip (jangan dipakai di MVP)     |
+   --------------------------------------------------------------------------
+   Prinsip: 90% netral (graphite/concrete/white) + 10% amber sebagai sinyal
+   energi. Satu aksen saja — persis seperti rambu di gardu/panel industri.
+   ========================================================================== */
+
+:root {
+  --ems-bg: #F2F3F0;
+  --ems-card: #FFFFFF;
+  --ems-ink: #191C1F;
+  --ems-muted: #6B7280;
+  --ems-line: #E3E5E0;
+  --ems-graphite-950: #101316;
+  --ems-graphite-900: #14171B;
+  --ems-graphite-800: #1E2329;
+  --ems-graphite-700: #2A3138;
+  --ems-steel-400: #9AA1AD;
+  --ems-line-dark: #262C33;
+  --ems-amber: #EAA500;
+  --ems-amber-deep: #B97A0C;
+  --ems-amber-soft: #FFF6DE;
+  --ems-ok: #1A7F4D;
+  --ems-radius: 0.625rem;
+
+  /* shadcn-compat (HSL agar mudah dipetakan ke tailwind.config inline) */
+  --background: 80 8% 95%;
+  --foreground: 200 9% 11%;
+  --card: 0 0% 100%;
+  --border: 80 6% 89%;
+  --muted: 80 6% 93%;
+  --muted-foreground: 220 9% 46%;
+  --primary: 42 100% 46%;
+  --primary-foreground: 0 0% 100%;
+  --radius: 0.625rem;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background: var(--ems-bg);
+  color: var(--ems-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar halus */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C9CDC6; border-radius: 8px; border: 2px solid var(--ems-bg); }
+#sidebar::-webkit-scrollbar-thumb { border-color: var(--ems-graphite-950); background: #343C44; }
+
+/* Sidebar drawer transition */
+#sidebar { transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+#overlay { transition: opacity 0.25s ease; }
+#overlay.is-hidden { opacity: 0; pointer-events: none; }
+
+/* Active bar di sidebar dark */
+.nav-item { position: relative; }
+.nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--ems-amber);
+}
+
+/* ==========================================================================
+   MOTION — fokus di halaman Dashboard, halus & hemat (industrial = tenang)
+   Pola: .reveal (awal) -> .is-visible (akhir), delay via --reveal-delay
+   ========================================================================== */
+@keyframes ems-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ems-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ems-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes ems-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(26, 127, 77, 0.45); }
+  50%      { box-shadow: 0 0 0 6px rgba(26, 127, 77, 0); }
+}
+@keyframes ems-shimmer {
+  from { background-position: -400px 0; }
+  to   { background-position: 400px 0; }
+}
+@keyframes ems-draw {
+  from { stroke-dashoffset: 600; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes ems-blink-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.reveal.is-visible {
+  animation: ems-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+.reveal-fade.is-visible {
+  animation-name: ems-fade-in;
+}
+
+/* Ikon empty yang melayang halus (hanya dashboard) */
+.float-slow { animation: ems-float 4s ease-in-out infinite; }
+
+/* Dot status berdenyut */
+.live-dot { animation: ems-pulse-dot 2s ease-in-out infinite; }
+
+/* Skeleton shimmer untuk KPI placeholder */
+.skeleton {
+  background: linear-gradient(90deg, #ECEEEA 25%, #F7F8F6 50%, #ECEEEA 75%);
+  background-size: 800px 100%;
+  animation: ems-shimmer 1.6s linear infinite;
+}
+
+/* Garis chart placeholder menggambar saat masuk */
+.chart-line {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+}
+.is-visible .chart-line { animation: ems-draw 1.4s ease forwards 0.3s; }
+.is-visible .chart-line.delay-2 { animation-delay: 0.55s; }
+
+/* Hormati pengguna yang menonaktifkan animasi */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; }
+  .reveal.is-visible,
+  .float-slow,
+  .live-dot,
+  .skeleton,
+  .is-visible .chart-line {
+    animation: none;
+  }
+  #sidebar, #overlay { transition: none; }
+}
