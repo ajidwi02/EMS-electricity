@@ -17,3 +17,8 @@ $config['ems_mqtt_topic']  = 'data/ems/lvmdp/+';
 $config['ems_mqtt_user']   = '';
 $config['ems_mqtt_pass']   = '';
 $config['ems_group']       = 'lvmdp';
+
+/* M2 worker (plans/ems-m2-mqtt-worker.md) — TCP broker untuk worker PHP CLI. */
+$config['ems_mqtt_host']          = $ems_raw_host;
+$config['ems_mqtt_tcp_port']      = 1883;
+$config['ems_mqtt_topic_pattern'] = 'data/ems/+/+';

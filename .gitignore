@@ -31,7 +31,7 @@ user_guide_src/cilexer/pycilexer.egg-info/*
  /tests/results/
 
 # EMS internal planning docs — never push
-plans/*.md
+plans/**/*.md
 
 # Local editor / agent workspace state — never push
 .zcode/
@@ -43,3 +43,7 @@ skills-lock.json
 .env.*
 *.pem
 *.key
+
+# CI3 local DB credentials (issue: plans/ems-database-schema.md §0.2 rule 5)
+# Adapt after fresh clone: fill in hostname/username/password/database locally.
+application/config/database.php
