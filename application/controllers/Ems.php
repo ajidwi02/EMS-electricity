@@ -64,8 +64,56 @@ class Ems extends CI_Controller {
     $this->render('nagai', 'nagai', 'Nagai', 'Monitoring panel / area Nagai');
   }
 
+  // M4 fase 4a: tampilan tabel historis (data DUMMY deterministik).
+  // Fase 4b nanti: tukar sumber ke Readings_model — view TIDAK berubah.
   public function export_data()
   {
-    $this->render('export_data', 'export', 'Export Data', 'Unduh data historis energi');
+    $all    = $this->dummy_readings();
+    $per    = 50;
+    $total  = count($all);
+    $pages  = ($total > 0) ? (int) ceil($total / $per) : 1;
+    $page   = (int) $this->input->get('page');
+    if ($page < 1)   { $page = 1; }
+    if ($page > $pages) { $page = $pages; }
+    $offset = ($page - 1) * $per;
+
+    $this->render('export_data', 'export', 'Export Data', 'Unduh data historis energi', array(
+      'rows'      => array_slice($all, $offset, $per),
+      'total'     => $total,
+      'page'      => $page,
+      'pages'     => $pages,
+      'floor_num' => $offset + 1,
+      'top_num'   => min($offset + $per, $total),
+      'per_page'  => $per,
+    ));
+  }
+
+  private function dummy_readings()
+  {
+    $tz = new DateTimeZone('Asia/Jakarta');
+    $start = new DateTime('today 08:00', $tz);
+    $rows = array();
+    for ($i = 0; $i < 137; $i++) {
+      $t = (clone $start)->modify('+' . $i . ' minutes');
+      $kw  = 555.0 + 40.0 * sin($i / 12) + 8.0 * sin($i / 3.4);
+      $kwh = 693.00 + ($kw / 60.0) * $i;
+      $rows[] = array(
+        'time'   => $t->format('Y-m-d H:i'),
+        'panel'  => 'LVMDP',
+        'v_r'    => round(235.0 + 3.0 * sin($i / 14), 2),
+        'v_s'    => round(244.0 + 2.6 * cos($i / 12), 2),
+        'v_t'    => round(250.0 + 2.2 * sin($i / 9), 2),
+        'v_rs'   => round(371.0 + 6.0 * sin($i / 16), 2),
+        'v_st'   => round(376.0 + 5.0 * cos($i / 13), 2),
+        'v_rt'   => round(383.0 + 4.0 * sin($i / 11), 2),
+        'i_r'    => round(790.0 + 40.0 * sin($i / 12), 2),
+        'i_s'    => round(755.0 + 35.0 * sin($i / 12 + 0.7), 2),
+        'i_t'    => round(765.0 + 38.0 * cos($i / 9), 2),
+        'pf'     => round(0.586 + 0.03 * sin($i / 9), 4),
+        'kw'     => round($kw, 2),
+        'kwh'    => round($kwh, 2),
+      );
+    }
+    return $rows;
   }
 }
