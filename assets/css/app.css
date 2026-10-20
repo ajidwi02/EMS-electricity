@@ -23,7 +23,9 @@
    | amber-deep       | #B97A0C   | teks di atas bg amber muda               |
    | amber-soft       | #FFF6DE   | bg badge / highlight hemat               |
    | moss / ok        | #1A7F4D   | status normal (dot + teks)               |
-   | danger           | #C2410C   | fault / trip (jangan dipakai di MVP)     |
+   | danger           | #C2410C   | fault / garis nominal FLA chart Tren     |
+   | fasa-r           | #E53935   | chart Tren: seri R (PUIL)                |
+   | fasa-s           | #F9A825   | chart Tren: seri S (PUIL)                |
    --------------------------------------------------------------------------
    Prinsip: 90% netral (graphite/concrete/white) + 10% amber sebagai sinyal
    energi. Satu aksen saja — persis seperti rambu di gardu/panel industri.
@@ -46,6 +48,11 @@
   --ems-amber-soft: #FFF6DE;
   --ems-ok: #1A7F4D;
   --ems-radius: 0.625rem;
+
+  /* L-T: warna fasa chart (amandemen GR-06 — HANYA untuk plot/legend chart Tren) */
+  --ems-fasa-r: #E53935;
+  --ems-fasa-s: #F9A825;
+  --ems-danger: #C2410C;
 
   /* shadcn-compat (HSL agar mudah dipetakan ke tailwind.config inline) */
   --background: 80 8% 95%;

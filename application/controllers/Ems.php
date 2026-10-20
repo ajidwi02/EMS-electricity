@@ -122,7 +122,9 @@ class Ems extends CI_Controller {
   }
 
   // URL /ems/lvmdp, /ems/lvmDP, /ems/LVMDP semua masuk sini (PHP method case-insensitive).
-  // M1 LVMDP-live: teruskan config MQTT (display saja, tanpa DB) ke view via $extra.
+  // L-T fase 1: /lvmdp = gauge MQTT realtime (TIDAK berubah) + 1 kartu "Tren 24 Jam"
+  // berisi 3 line chart dari data dummy harian (display saja).
+  // Kontrak view: §2.5 plans/ems-lvmdp-trend-charts.md. lvmdp-live.js TIDAK disentuh.
   public function lvmdp()
   {
     $this->config->load('ems', TRUE);
@@ -132,8 +134,89 @@ class Ems extends CI_Controller {
       'mqtt_topic'  => (is_array($ems) && isset($ems['ems_mqtt_topic'])) ? $ems['ems_mqtt_topic'] : 'data/ems/lvmdp/+',
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
+      'trends'      => $this->trend_dummy(),
     );
     $this->render('lvmdp', 'lvmdp', 'LVMDP', 'Monitoring Low Voltage Main Distribution Panel', $extra);
+  }
+
+  // L-T: data dummy Tren 24 Jam — deterministik, 289 titik (00:00..24:00, 5 menit).
+  // Cerita beban mengikuti spec induk §1: malam ringan -> lonjakan ~08:12 ->
+  // piringan siang -> naik tipis saat WBP. Tegangan antikorelasi beban; arus T terendah.
+  private function trend_dummy()
+  {
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $tgl   = new DateTime('today', $tz);
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+    $tgl_lbl = $tgl->format('j') . ' ' . $bulan[(int) $tgl->format('n')] . ' '
+             . $tgl->format('Y') . ' (WIB)';
+
+    $clamp = function ($v, $lo, $hi) {
+      if ($v < $lo) return $lo;
+      if ($v > $hi) return $hi;
+      return $v;
+    };
+
+    $n = 288; // interval; 289 titik = 00:00 + n x 5 menit
+    $series = array('r' => array(), 's' => array(), 't' => array(),
+                    'rs' => array(), 'st' => array(), 'rt' => array(),
+                    'ir' => array(), 'is' => array(), 'it' => array());
+    $times  = array(); // label 'HH:MM' per titik (WIB)
+
+    for ($i = 0; $i <= $n; $i++) {
+      $h    = $i / 12;
+      $b1   = exp(-0.5 * pow(($h - 8.2) / 0.45, 2));
+      $b2   = exp(-0.5 * pow(($h - 13.0) / 2.0, 2));
+      $b3   = exp(-0.5 * pow(($h - 19.5) / 1.1, 2));
+      $load = 300 + 520 * $b1 + 250 * $b2 + 90 * $b3;
+      $vln  = 229.6 - 9.2 * ($load / 870);
+      $vll  = 1.7320508 * $vln;
+
+      $series['r'][]  = $clamp($vln + 1.10 * sin($i / 24) + 0.40, 190, 240);
+      $series['s'][]  = $clamp($vln + 0.90 * cos($i / 21), 190, 240);
+      $series['t'][]  = $clamp($vln + 1.05 * sin($i / 27), 190, 240);
+      $series['rs'][] = $clamp($vll + 1.80 * sin($i / 17) + 1.80, 330, 420);
+      $series['st'][] = $clamp($vll + 1.50 * cos($i / 15), 330, 420);
+      $series['rt'][] = $clamp($vll + 1.40 * sin($i / 19), 330, 420);
+      $series['ir'][] = $clamp($load * (1.035 + 0.025 * sin($i / 13.7)), 0, 1200);
+      $series['is'][] = $clamp($load * (0.975 + 0.025 * cos($i / 11.3)), 0, 1200);
+      $series['it'][] = $clamp($load * (0.930 + 0.025 * sin($i / 9.1)), 0, 1200);
+
+      $mins    = $i * 5; // menit sejak 00:00
+      $times[] = sprintf('%02d:%02d', intdiv($mins, 60), $mins % 60);
+    }
+
+    $round = function ($a) {
+      $b = array();
+      foreach ($a as $v) { $b[] = round($v, 2); }
+      return $b;
+    };
+    $stat = function ($vals, $times) {
+      $min = $vals[0]; $max = $vals[0]; $imin = 0; $imax = 0; $sum = 0.0;
+      foreach ($vals as $k => $v) {
+        if ($v < $min) { $min = $v; $imin = $k; }
+        if ($v > $max) { $max = $v; $imax = $k; }
+        $sum += $v;
+      }
+      return array('min' => $min, 'rmin' => $times[$imin], 'max' => $max,
+                   'rmax' => $times[$imax], 'avg' => $sum / count($vals));
+    };
+    $mk = function ($key) use ($series, $times, $round, $stat) {
+      $v = $round($series[$key]);
+      return array('vals' => $v) + $stat($v, $times);
+    };
+
+    return array(
+      'tgl' => $tgl_lbl,
+      'charts' => array(
+        'ln' => array('title' => 'Tegangan Fasa (L-N)', 'unit' => 'Volt (V)',
+          'series' => array('R' => $mk('r'), 'S' => $mk('s'), 'T' => $mk('t'))),
+        'll' => array('title' => 'Tegangan Antar Fasa (L-L)', 'unit' => 'Volt (V)',
+          'series' => array('R' => $mk('rs'), 'S' => $mk('st'), 'T' => $mk('rt'))),
+        'a'  => array('title' => 'Arus', 'unit' => 'Ampere (A)',
+          'series' => array('R' => $mk('ir'), 'S' => $mk('is'), 'T' => $mk('it'))),
+      ),
+    );
   }
 
   public function puma()
