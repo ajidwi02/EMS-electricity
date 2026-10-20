@@ -143,6 +143,27 @@ class Readings_model extends CI_Model {
   }
 
   /**
+   * Statistik hari-ini 1 panel (baru CP-016, gaya §8.x schema):
+   * beban puncak (MAX kw), pf rata-rata, kWh min/max, update terakhir, jumlah baris.
+   * Return: row array (NULL field bila 0 baris hari ini; n = 0).
+   */
+  public function today_stats($panel_id)
+  {
+    $sql = "SELECT"
+      . " MAX(`kw`) AS peak_kw,"
+      . " AVG(`pf`) AS avg_pf,"
+      . " MIN(`kwh`) AS kwh_min,"
+      . " MAX(`kwh`) AS kwh_max,"
+      . " MAX(`recorded_at`) AS last_at,"
+      . " COUNT(*) AS n"
+      . " FROM `readings`"
+      . " WHERE `panel_id` = ?"
+      . "   AND `recorded_at` >= CURDATE()";
+    $row = $this->db->query($sql, array((int) $panel_id))->row_array();
+    return $row === NULL ? array() : $row;
+  }
+
+  /**
    * Snapshot semua panel aktif pada menit tertentu (§8.4).
    */
   public function snapshot_panels($recorded_at)
@@ -171,6 +192,53 @@ class Readings_model extends CI_Model {
       . " GROUP BY p.`code`, DATE(r.`recorded_at`)"
       . " ORDER BY tanggal DESC, p.`sort_order`";
     return $this->db->query($sql, array($days))->result_array();
+  }
+
+  /**
+   * Jumlah baris rentang tanggal (fase 4b, spec filters §9/§12) — COUNT terpisah
+   * agar pagination tidak menyeret seluruh baris ke PHP (index idx_readings_recorded).
+   * Rentang inklusif [from 00:00:00 .. to 23:59:59]; server MySQL = WIB (CP-009).
+   * Return: int.
+   */
+  public function count_range($from, $to)
+  {
+    $sql = "SELECT COUNT(*) AS n"
+      . " FROM `readings`"
+      . " WHERE `recorded_at` >= ?"
+      . "   AND `recorded_at` <= ?";
+    $row = $this->db->query($sql, array(
+      (string) $from . ' 00:00:00',
+      (string) $to . ' 23:59:59',
+    ))->row_array();
+    return ($row === NULL || !isset($row['n'])) ? 0 : (int) $row['n'];
+  }
+
+  /**
+   * Satu halaman baris rentang tanggal (fase 4b, spec filters §12).
+   * Kolom result SENGAJA di-alias ke kontrak view (`time` 'Y-m-d H:i'
+   * + `panel` nama tampil + 12 metrik) supaya view tidak berubah sama sekali.
+   * ORDER BY recorded_at ASC, id ASC — deterministik menyeberang halaman
+   * (id = PK BIGINT, tie-breaker bila panel berbeda dalam menit sama).
+   * LIMIT/OFFSET inline (int)-cast: mysqli native prepare menolak string
+   * utk LIMIT; nilai dari kontroller internal, bukan user raw.
+   */
+  public function range_page($from, $to, $per, $offset)
+  {
+    $sql = "SELECT"
+      . " DATE_FORMAT(`r`.`recorded_at`, '%Y-%m-%d %H:%i') AS `time`,"
+      . " `p`.`name` AS `panel`,"
+      . " `r`.`v_r`, `r`.`v_s`, `r`.`v_t`, `r`.`v_rs`, `r`.`v_st`, `r`.`v_rt`,"
+      . " `r`.`i_r`, `r`.`i_s`, `r`.`i_t`, `r`.`pf`, `r`.`kw`, `r`.`kwh`"
+      . " FROM `readings` `r`"
+      . " JOIN `panels` `p` ON `p`.`id` = `r`.`panel_id`"
+      . " WHERE `r`.`recorded_at` >= ?"
+      . "   AND `r`.`recorded_at` <= ?"
+      . " ORDER BY `r`.`recorded_at` ASC, `r`.`id` ASC"
+      . " LIMIT " . (int) $per . " OFFSET " . (int) $offset;
+    return $this->db->query($sql, array(
+      (string) $from . ' 00:00:00',
+      (string) $to . ' 23:59:59',
+    ))->result_array();
   }
 
   /**
