@@ -61,6 +61,12 @@ $trend_points = function ($vals, $ymin, $ymax) {
 $trend_num = function ($v, $dec = 1) {
   return number_format((float) $v, $dec, '.', '');
 };
+
+// ── K-T fase 1: kontrak kartu Konsumsi & Tarif Hari Kemarin — spec §2.3 plans/ems-lvmdp-tarif-kemarin.md ──
+// Format angka ledger: comma-thousands + dot-decimal (D3) — kWh 2 des, Rp 0 des.
+$tarif_num = function ($v, $dec) {
+  return number_format((float) $v, $dec, '.', ',');
+};
 ?>
 <div id="lvmdp-root"
   data-ws="<?php echo html_escape(isset($mqtt_ws_url) ? $mqtt_ws_url : 'ws://localhost:8083/mqtt'); ?>"
@@ -185,6 +191,92 @@ $trend_num = function ($v, $dec = 1) {
         <span class="text-xs text-ems-muted">kWh</span>
         <span class="truncate text-xl font-semibold tabular-nums"><span data-f="Kwh" data-dec="1">-</span> <span class="text-xs font-normal text-ems-muted">kWh</span></span>
       </div>
+    </div>
+  </div>
+
+  <!-- K-T fase 1: kartu "Konsumsi & Tarif Hari Kemarin" (dummy display saja, tanpa JS) -->
+  <div class="rounded-lg border border-ems-line bg-white">
+    <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#EFF0ED]">
+          <i data-lucide="receipt" class="size-4 text-ems-muted"></i>
+        </span>
+        <div class="flex min-w-0 flex-col">
+          <h2 class="truncate text-sm font-semibold">Konsumsi &amp; Tarif Hari Kemarin</h2>
+          <p class="truncate text-xs text-ems-muted">Pembagian kWh &amp; biaya energi per blok tarif PLN</p>
+        </div>
+      </div>
+      <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
+        <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($tarif['tgl']) ?></span>
+        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+      </div>
+    </div>
+
+    <div class="px-4 py-4 md:px-6">
+
+      <div role="img" aria-label="Peta blok tarif 24 jam WIB: LWBP 2 22:00–06:00 · LWBP 1 06:00–17:00 · WBP 17:00–22:00" class="overflow-hidden rounded-md border border-ems-line">
+        <div aria-hidden="true" class="flex h-7">
+          <div class="flex min-w-0 items-center justify-center bg-ems-bg" style="width:25.00%"><span class="truncate px-1 text-[10px] font-medium text-ems-muted">LWBP 2</span></div>
+          <div class="flex min-w-0 items-center justify-center bg-ems-bg" style="width:45.83%"><span class="truncate px-1 text-[10px] font-medium text-ems-muted">LWBP 1</span></div>
+          <div class="flex min-w-0 items-center justify-center bg-ems-ambersoft" style="width:20.83%"><span class="truncate px-1 text-[10px] font-semibold text-ems-amberdeep">WBP</span></div>
+          <div class="min-w-0 flex-1 bg-ems-bg"></div>
+        </div>
+        <div aria-hidden="true" class="relative mt-1 h-4">
+          <span class="absolute left-0 top-0 leading-4 text-[10px] tabular-nums text-ems-muted">00:00</span>
+          <span class="absolute top-0 -translate-x-1/2 leading-4 text-[10px] tabular-nums text-ems-muted" style="left:25.00%">06:00</span>
+          <span class="absolute top-0 -translate-x-1/2 leading-4 text-[10px] tabular-nums text-ems-muted" style="left:70.83%">17:00</span>
+          <span class="absolute top-0 -translate-x-full leading-4 text-[10px] tabular-nums text-ems-muted" style="left:91.67%">22:00</span>
+          <span class="absolute right-0 top-0 leading-4 text-[10px] tabular-nums text-ems-muted">24:00</span>
+        </div>
+      </div>
+
+      <table class="mt-4 w-full table-fixed">
+        <colgroup>
+          <col style="width:36%"><col style="width:26%"><col style="width:38%">
+        </colgroup>
+        <caption class="sr-only">Rincian konsumsi kWh dan estimasi tarif per blok PLN untuk hari kemarin (WIB), data dummy</caption>
+        <thead>
+          <tr class="border-b border-ems-line/70 text-[10px] font-medium uppercase tracking-wider text-ems-muted">
+            <th scope="col" class="py-1.5 pr-2 text-left">Blok tarif</th>
+            <th scope="col" class="py-1.5 px-2 text-right">kWh</th>
+            <th scope="col" class="py-1.5 pl-2 text-right">Tarif (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($tarif['rows'] as $r): $st = ($r['t'] === 'subtotal'); ?>
+          <tr class="border-b border-ems-line/50 text-[13px] leading-6">
+            <th scope="row" class="py-2 pr-2 text-left font-<?= $st ? 'medium' : 'normal'; ?>">
+              <span class="truncate"><?= html_escape($r['label']) ?></span>
+              <span class="tabular-nums text-ems-muted text-[10px]">· <?= html_escape($r['win']) ?></span>
+            </th>
+            <td class="px-2 py-2 text-right tabular-nums">
+              <span class="<?= $st ? 'font-medium' : 'font-normal'; ?> text-ems-ink"><?= $tarif_num($r['kwh'], 2) ?></span><span class="text-[10px] text-ems-muted hidden sm:inline"> kWh</span>
+            </td>
+            <td class="pl-2 py-2 text-right tabular-nums">
+              <span class="<?= $st ? 'font-medium' : 'font-normal'; ?> text-ems-ink"><?= $tarif_num($r['biaya'], 0) ?></span><span class="text-[10px] text-ems-muted hidden sm:inline"> Rp</span>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+        <tfoot>
+          <tr class="border-t border-t-2 border-ems-line text-[13px] leading-6">
+            <th scope="row" class="py-2.5 pr-2 text-left font-semibold text-ems-ink">
+              TOTAL
+              <span class="block tabular-nums text-ems-muted text-[10px] font-normal">satu hari (WIB)</span>
+            </th>
+            <td class="px-2 py-2.5 text-right tabular-nums">
+              <span class="font-semibold text-ems-ink"><?= $tarif_num($tarif['kwh_total'], 2) ?></span><span class="text-[10px] text-ems-muted hidden sm:inline"> kWh</span>
+            </td>
+            <td class="pl-2 py-2.5 text-right tabular-nums">
+              <span class="font-semibold text-ems-ink">Rp <?= $tarif_num($tarif['biaya_total'], 0) ?></span><span class="text-[10px] text-ems-muted hidden sm:inline"> Rp</span>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <p class="mt-3 text-[11px] leading-4 text-ems-muted">
+        Tarif LWBP Rp <?= $tarif_num($tarif['rate_l'], 2) ?>/kWh · WBP = <?= html_escape($tarif['k']) ?>× (Rp <?= $tarif_num($tarif['rate_l'] * $tarif['k'], 2) ?>/kWh) · Permen ESDM 7/2024, gol. I-3/TM · Estimasi biaya energi harian — belum termasuk RM, kVArh, PPN, PPJ, materai.
+      </p>
     </div>
   </div>
 

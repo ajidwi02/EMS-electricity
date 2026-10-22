@@ -121,10 +121,11 @@ class Ems extends CI_Controller {
     ));
   }
 
-  // URL /ems/lvmdp, /ems/lvmDP, /ems/LVMDP semua masuk sini (PHP method case-insensitive).
-  // L-T fase 1: /lvmdp = gauge MQTT realtime (TIDAK berubah) + 1 kartu "Tren 24 Jam"
-  // berisi 3 line chart dari data dummy harian (display saja).
-  // Kontrak view: §2.5 plans/ems-lvmdp-trend-charts.md. lvmdp-live.js TIDAK disentuh.
+  // /ems/lvmdp, /ems/lvmDP, /ems/LVMDP semua masuk sini (PHP method case-insensitive).
+  // /lvmdp = gauge MQTT realtime (TIDAK berubah, CP-006…CP-008)
+  //        + kartu "Tren 24 Jam" dummy (L-T fase 1, CP-020 — kontrak §2.5 plans/ems-lvmdp-trend-charts.md)
+  //        + kartu "Konsumsi & Tarif Hari Kemarin" dummy (K-T fase 1 — kontrak §2.3
+  //          plans/ems-lvmdp-tarif-kemarin.md; rumus plans/perhitungan-tarif-listrik-wbp-lwbp.md §3.2B).
   public function lvmdp()
   {
     $this->config->load('ems', TRUE);
@@ -135,6 +136,7 @@ class Ems extends CI_Controller {
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
       'trends'      => $this->trend_dummy(),
+      'tarif'       => $this->tarif_kemarin_dummy(),
     );
     $this->render('lvmdp', 'lvmdp', 'LVMDP', 'Monitoring Low Voltage Main Distribution Panel', $extra);
   }
@@ -216,6 +218,51 @@ class Ems extends CI_Controller {
         'a'  => array('title' => 'Arus', 'unit' => 'Ampere (A)',
           'series' => array('R' => $mk('ir'), 'S' => $mk('is'), 'T' => $mk('it'))),
       ),
+    );
+  }
+
+  // K-T fase 1: dummy "Konsumsi & Tarif Hari Kemarin" — deterministik (spec §4
+  // plans/ems-lvmdp-tarif-kemarin.md). kWh = KONSTANTA contoh user (display saja,
+  // bukan DB/MQTT). Biaya dari rumus Permen ESDM 7/2024 (docs §3.2B): round(kwh x tarif)
+  // LALU dijumlahkan hasil pembulatannya per blok — jangan hitung ulang (docs §6.2).
+  // K = 1.5 DUMMY (dari sampel user; nilai SPJBTL wajib dikonfirmasi nanti, docs §2.2).
+  private function tarif_kemarin_dummy()
+  {
+    $tz     = new DateTimeZone('Asia/Jakarta');
+
+    // Tanggal "kemarin" WIB — DINAMIS (GR-05). kWh/biaya TETAP nilai dummy.
+    $tgl    = new DateTime('yesterday', $tz);
+    $bulan  = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                    7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+    $tgl_lbl = 'Kemarin — ' . $tgl->format('j') . ' ' . $bulan[(int) $tgl->format('n')]
+             . ' ' . $tgl->format('Y') . ' (WIB)';
+
+    $rate_l = 1035.78;  // Permen ESDM 7/2024, gol. I-3/TM
+    $k_wbp  = 1.5;      // faktor pengali WBP (dummy) — tarif WBP = 1.5 x 1035.78 = 1553.67
+
+    $kwh_l1 = 7131.29;  // data dummy = angka contoh user (spec §2.1)
+    $kwh_l2 = 440.84;
+    $kwh_w  = 1614.29;
+
+    $b_l1 = round($kwh_l1 * $rate_l);
+    $b_l2 = round($kwh_l2 * $rate_l);
+    $b_w  = round($kwh_w * ($k_wbp * $rate_l));
+    $b_l  = $b_l1 + $b_l2;                 // jumlah hasil pembulatan (docs §6.2)
+
+    $kwh_l = $kwh_l1 + $kwh_l2;
+
+    return array(
+      'tgl'         => $tgl_lbl,
+      'rows'        => array(
+        array('t' => 'item',     'label' => 'LWBP 1', 'win' => '06:00–17:00',     'kwh' => 7131.29, 'biaya' => $b_l1),
+        array('t' => 'item',     'label' => 'LWBP 2', 'win' => '22:00–06:00',     'kwh' => 440.84,  'biaya' => $b_l2),
+        array('t' => 'subtotal', 'label' => 'LWBP',   'win' => 'LWBP 1 + LWBP 2', 'kwh' => $kwh_l,  'biaya' => $b_l),
+        array('t' => 'item',     'label' => 'WBP',    'win' => '17:00–22:00',     'kwh' => 1614.29, 'biaya' => $b_w),
+      ),
+      'kwh_total'   => $kwh_l + $kwh_w,
+      'biaya_total' => $b_l + $b_w,
+      'rate_l'      => $rate_l,
+      'k'           => $k_wbp,
     );
   }
 
