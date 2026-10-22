@@ -126,6 +126,8 @@ class Ems extends CI_Controller {
   //        + kartu "Tren 24 Jam" dummy (L-T fase 1, CP-020 — kontrak §2.5 plans/ems-lvmdp-trend-charts.md)
   //        + kartu "Konsumsi & Tarif Hari Kemarin" dummy (K-T fase 1 — kontrak §2.3
   //          plans/ems-lvmdp-tarif-kemarin.md; rumus plans/perhitungan-tarif-listrik-wbp-lwbp.md §3.2B).
+  //        + kartu "Power Hari Ini" dummy (P-H fase 1 — kontrak §2
+  //          plans/ems-lvmdp-power-hari-ini.md; skala Y 0-600 kW pin user).
   public function lvmdp()
   {
     $this->config->load('ems', TRUE);
@@ -137,6 +139,7 @@ class Ems extends CI_Controller {
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
       'trends'      => $this->trend_dummy(),
       'tarif'       => $this->tarif_kemarin_dummy(),
+      'power'       => $this->power_today_dummy(),
     );
     $this->render('lvmdp', 'lvmdp', 'LVMDP', 'Monitoring Low Voltage Main Distribution Panel', $extra);
   }
@@ -218,6 +221,68 @@ class Ems extends CI_Controller {
         'a'  => array('title' => 'Arus', 'unit' => 'Ampere (A)',
           'series' => array('R' => $mk('ir'), 'S' => $mk('is'), 'T' => $mk('it'))),
       ),
+    );
+  }
+
+  // P-H fase 1: dummy "Power Hari Ini" — 1 line chart, 289 titik (00:00..24:00, 5 menit),
+  // skala tetap 0-600 kW (pin user, LOCKED). Deterministik: lantai malam 300 kW (senada
+  // dasar cerita kartu Tren) + lonjakan pagi-siang + puncak WBP + ripple harmonik kecil.
+  // Display saja; sumber data nyata menunggu P-H fase 2 (spec §12).
+  private function power_today_dummy()
+  {
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $tgl   = new DateTime('today', $tz);
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+    $tgl_lbl = $tgl->format('j') . ' ' . $bulan[(int) $tgl->format('n')] . ' '
+             . $tgl->format('Y') . ' (WIB)';
+
+    $n    = 288;         // interval 5 menit -> 289 titik (00:00..24:00)
+    $ymax = 600.0;       // LOCKED (user) — jangan auto-fit
+    $ymin = 0.0;
+
+    $vals  = array();
+    $times = array();
+    for ($i = 0; $i <= $n; $i++) {
+      $h  = $i / 12;                                   // jam desimal 0..24
+      $g1 = exp(-0.5 * pow(($h - 10.5) / 1.90, 2));    // lonjakan pagi-siang
+      $g2 = exp(-0.5 * pow(($h - 19.6) / 1.15, 2));    // puncak WBP (beban malam)
+      $pw = 300.0 + 140.0 * $g1 + 120.0 * $g2
+          + 7.0 * sin($i / 11.0) + 3.5 * sin($i / 23.0);  // ripple kecil
+      $vals[]  = round($pw, 2);
+      $mins    = $i * 5;
+      $times[] = sprintf('%02d:%02d', intdiv($mins, 60), $mins % 60);
+    }
+
+    // Statistik: nilai PERTAMA yang menang (pola konsisten $stat trend_dummy)
+    $min = $vals[0]; $max = $vals[0]; $imin = 0; $imax = 0; $sum = 0.0;
+    foreach ($vals as $k => $v) {
+      if ($v < $min) { $min = $v; $imin = $k; }
+      if ($v > $max) { $max = $v; $imax = $k; }
+      $sum += $v;
+    }
+    $stat = array('min' => $min, 'rmin' => $times[$imin], 'avg' => $sum / 289,
+                  'max' => $max, 'rmax' => $times[$imax]);
+
+    // Puncak global: persen utk chip + koordinat svg utk titik ink
+    $peak = array(
+      'x'   => sprintf('%.2F', ($imax / $n) * 100),
+      'y'   => sprintf('%.2F', (1 - $vals[$imax] / $ymax) * 100),
+      'cy'  => sprintf('%.2F', (1 - $vals[$imax] / $ymax) * 100 - 3),
+      'cpx' => sprintf('%.2F', 800 * $imax / $n),
+      'cpy' => sprintf('%.2F', 300 - 300 * $vals[$imax] / $ymax),
+      'val' => $vals[$imax],
+      't'   => $times[$imax],
+    );
+
+    return array(
+      'tgl'   => $tgl_lbl,
+      'ymin'  => $ymin,
+      'ymax'  => $ymax,
+      'ystep' => 100.0,
+      'vals'  => $vals,
+      'stat'  => $stat,
+      'peak'  => $peak,
     );
   }
 

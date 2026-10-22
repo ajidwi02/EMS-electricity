@@ -376,6 +376,75 @@ $tarif_num = function ($v, $dec) {
     </p>
   </div>
 
+  <!-- P-H fase 1: kartu "Power Hari Ini" (dummy display saja, tanpa JS) -->
+  <div class="rounded-lg border border-ems-line bg-white">
+    <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#EFF0ED]">
+          <i data-lucide="power" class="size-4 text-ems-muted"></i>
+        </span>
+        <div class="flex min-w-0 flex-col">
+          <h2 class="truncate text-sm font-semibold">Power Hari Ini</h2>
+          <p class="truncate text-xs text-ems-muted">Daya rata-rata 5 menit — pola beban hari ini</p>
+        </div>
+      </div>
+      <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
+        <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($power['tgl']) ?></span>
+        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+      </div>
+    </div>
+
+    <div class="px-4 py-4 md:px-6">
+
+      <div class="flex">
+        <div class="relative w-12 shrink-0 h-40 sm:h-52 lg:h-60">
+          <?php for ($yv = $power['ymin']; $yv <= $power['ymax'] + 0.001; $yv += $power['ystep']):
+            $frac = ($power['ymax'] - $yv) / ($power['ymax'] - $power['ymin']); ?>
+          <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= (int) $yv ?></span>
+          <?php endfor; ?>
+        </div>
+        <div class="relative min-w-0 flex-1 h-40 sm:h-52 lg:h-60">
+          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" role="img" aria-label="Daya aktif (kW) hari ini WIB, data dummy">
+            <rect x="600" y="0" width="133.33" height="300" fill="rgba(234,165,0,0.10)" />
+            <?php for ($yv = $power['ymin']; $yv <= $power['ymax'] + 0.001; $yv += $power['ystep']):
+              $gy = 300 - 300 * (($yv - $power['ymin']) / ($power['ymax'] - $power['ymin'])); ?>
+            <line x1="0" y1="<?= sprintf('%.2F', $gy) ?>" x2="800" y2="<?= sprintf('%.2F', $gy) ?>" stroke="#E3E5E0" stroke-width="1" vector-effect="non-scaling-stroke" />
+            <?php endfor; ?>
+            <polyline fill="none" stroke="#191C1F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="<?= $trend_points($power['vals'], $power['ymin'], $power['ymax']) ?>" />
+            <circle cx="<?= $power['peak']['cpx'] ?>" cy="<?= $power['peak']['cpy'] ?>" r="3" fill="#191C1F" />
+          </svg>
+          <span class="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded border border-ems-line bg-white/90 px-1.5 py-px text-[10px] font-medium tabular-nums text-ems-muted" style="top:<?= $power['peak']['cy'] ?>%;left:<?= $power['peak']['x'] ?>%">Maks <?= $trend_num($power['peak']['val'], 1) ?> kW <?= html_escape($power['peak']['t']) ?></span>
+        </div>
+      </div>
+
+      <div class="mt-1 flex">
+        <div class="w-12 shrink-0"></div>
+        <div class="flex min-w-0 flex-1 justify-between px-px text-[10px] tabular-nums text-ems-muted">
+          <span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span><span>24:00</span>
+        </div>
+      </div>
+
+      <div class="mt-3 grid grid-cols-3 gap-2 sm:gap-4">
+        <?php $p_st = $power['stat']; foreach (array('max' => 'Maks', 'avg' => 'Rata', 'min' => 'Min') as $fld => $plbl): ?>
+        <div class="min-w-0">
+          <span class="block text-[10px] text-ems-muted"><?= $plbl ?></span>
+          <span class="block truncate tabular-nums text-ems-ink">
+            <span class="font-semibold"><?= $trend_num($p_st[$fld], 1) ?></span>
+            <span class="text-xs font-normal text-ems-muted">kW</span>
+            <?php if ($fld !== 'avg'): ?>
+            <span class="text-[10px] text-ems-muted"><?= html_escape($p_st['r' . $fld]) ?></span>
+            <?php endif; ?>
+          </span>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <p class="border-t border-ems-line px-4 py-3 text-[11px] text-ems-muted md:px-6">
+      Pita kuning = WBP 18:00–22:00 · Skala tetap 0–600 kW · Titik ink = puncak daya · Data dummy — data realtime tetap dari MQTT.
+    </p>
+  </div>
+
   <p class="truncate text-xs text-ems-muted">Jarum gauge mengikuti data MQTT live dengan animasi halus (display saja, tanpa database).</p>
 </div>
 <script src="<?php echo base_url('assets/js/mqtt.min.js'); ?>"></script>
