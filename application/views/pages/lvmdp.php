@@ -1,5 +1,4 @@
 <?php defined('BASEPATH') OR exit('No direct script access allowed');
-$this->load->view('partials/page_header', array('title' => $title, 'subtitle' => $subtitle));
 // Slot gauge LVMDP (G1): tiap card 3 unit. (f = field MQTT, label tampil, aria untuk screen reader.)
 // Zona + jarum digambar JS dari 1 tabel (plans/ems-lvmdp-gauge-charts.md §2.3). Tanpa JS: slot kosong + angka '-'.
 $ln_gauges = array(
@@ -62,7 +61,7 @@ $trend_num = function ($v, $dec = 1) {
   return number_format((float) $v, $dec, '.', '');
 };
 
-// ── K-T fase 1: kontrak kartu Konsumsi & Tarif Hari Kemarin — spec §2.3 plans/ems-lvmdp-tarif-kemarin.md ──
+// ── K-T fase 1: kontrak kartu "Konsumsi & Tarif Hari Kemarin" — spec §2.3 plans/ems-lvmdp-tarif-kemarin.md ──
 // Format angka ledger: comma-thousands + dot-decimal (D3) — kWh 2 des, Rp 0 des.
 $tarif_num = function ($v, $dec) {
   return number_format((float) $v, $dec, '.', ',');
@@ -75,13 +74,14 @@ $tarif_num = function ($v, $dec) {
   data-pass="<?php echo html_escape(isset($mqtt_pass) ? $mqtt_pass : ''); ?>"
   class="flex flex-col gap-6">
 
-  <div class="rounded-lg border border-ems-line bg-white">
-    <div class="flex items-center gap-3 border-b border-ems-line px-4 py-3 md:px-6">
+  <details class="group rounded-lg border border-ems-line bg-white">
+    <summary class="flex list-none cursor-pointer select-none items-center gap-3 px-4 py-3 md:px-6">
       <span id="lvmdp-dot" class="size-2 shrink-0 rounded-full bg-ems-muted"></span>
       <h2 class="truncate text-sm font-semibold">Status Koneksi</h2>
       <span id="lvmdp-conn" class="ml-auto shrink-0 truncate text-xs text-ems-muted">Menghubungkan…</span>
-    </div>
-    <div class="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:gap-6 md:px-6">
+      <i data-lucide="chevron-down" class="size-4 shrink-0 text-ems-muted group-open:rotate-180"></i>
+    </summary>
+    <div class="flex flex-col gap-3 border-t border-ems-line px-4 py-4 md:flex-row md:items-center md:gap-6 md:px-6">
       <div class="flex min-w-0 flex-col gap-1">
         <span class="text-[11px] font-medium uppercase tracking-wider text-ems-muted">Terakhir update</span>
         <span id="lvmdp-updated" class="truncate text-sm font-semibold tabular-nums">-</span>
@@ -95,7 +95,7 @@ $tarif_num = function ($v, $dec) {
         <span class="truncate text-xs text-ems-muted">data/ems/lvmdp/+</span>
       </div>
     </div>
-  </div>
+  </details>
 
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
     <div class="flex flex-col gap-3 rounded-lg border border-ems-line bg-white p-4">
@@ -278,6 +278,92 @@ $tarif_num = function ($v, $dec) {
         Tarif LWBP Rp <?= $tarif_num($tarif['rate_l'], 2) ?>/kWh · WBP = <?= html_escape($tarif['k']) ?>× (Rp <?= $tarif_num($tarif['rate_l'] * $tarif['k'], 2) ?>/kWh) · Permen ESDM 7/2024, gol. I-3/TM · Estimasi biaya energi harian — belum termasuk RM, kVArh, PPN, PPJ, materai.
       </p>
     </div>
+  </div>
+
+  <!-- T-T-H fase 1: kartu "Total Tarif Harian" (grouped bar chart dummy, tanpa JS) -->
+  <div class="rounded-lg border border-ems-line bg-white">
+    <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#EFF0ED]">
+          <i data-lucide="bar-chart-3" class="size-4 text-ems-muted"></i>
+        </span>
+        <div class="flex min-w-0 flex-col">
+          <h2 class="truncate text-sm font-semibold">Total Tarif Harian</h2>
+          <p class="truncate text-xs text-ems-muted">Tarif harian 7 hari terakhir — LWBP, WBP &amp; Total</p>
+        </div>
+      </div>
+      <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
+        <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($tarif7['tgl']) ?></span>
+        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+      </div>
+    </div>
+
+    <div class="px-4 py-4 md:px-6">
+
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span class="flex items-center gap-1.5"><span class="size-2.5 shrink-0 rounded-sm" style="background:var(--ems-steel-400)"></span><span class="text-[10px] font-medium text-ems-muted">LWBP</span></span>
+        <span class="flex items-center gap-1.5"><span class="size-2.5 shrink-0 rounded-sm" style="background:var(--ems-amber)"></span><span class="text-[10px] font-medium text-ems-muted">WBP</span></span>
+        <span class="flex items-center gap-1.5"><span class="size-2.5 shrink-0 rounded-sm" style="background:var(--ems-ink)"></span><span class="text-[10px] font-medium text-ems-muted">Total</span></span>
+      </div>
+
+      <?php $n7  = count($tarif7['days']);
+            $slot = 800 / $n7;
+            $b_w  = 20.0;
+            $b_g  = 6.0;
+            $b_o  = ($slot - (3 * $b_w + 2 * $b_g)) / 2; ?>
+      <div class="mt-2 flex">
+        <div class="relative w-12 shrink-0 h-40 sm:h-52 lg:h-60">
+          <?php for ($yv = $tarif7['ymin']; $yv <= $tarif7['ymax'] + 0.001; $yv += $tarif7['ystep']):
+            $frac = ($tarif7['ymax'] - $yv) / ($tarif7['ymax'] - $tarif7['ymin']); ?>
+          <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= ((int) $yv === 0) ? '0' : number_format($yv / 1000000.0, 0, '.', '') . ' jt' ?></span>
+          <?php endfor; ?>
+        </div>
+        <div class="relative min-w-0 flex-1 h-40 sm:h-52 lg:h-60">
+          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" role="img" aria-label="Tarif harian (Rp) 7 hari terakhir WIB, data dummy">
+            <?php for ($yv = $tarif7['ymin']; $yv <= $tarif7['ymax'] + 0.001; $yv += $tarif7['ystep']):
+              $gy = 300 - 300 * (($yv - $tarif7['ymin']) / ($tarif7['ymax'] - $tarif7['ymin'])); ?>
+            <line x1="0" y1="<?= sprintf('%.2F', $gy) ?>" x2="800" y2="<?= sprintf('%.2F', $gy) ?>" stroke="#E3E5E0" stroke-width="1" vector-effect="non-scaling-stroke" />
+            <?php endfor; ?>
+            <?php foreach ($tarif7['days'] as $i => $d):
+              $xl = $i * $slot + $b_o;
+              $x1 = $xl;
+              $x2 = $xl + $b_w + $b_g;
+              $x3 = $xl + 2 * ($b_w + $b_g); ?>
+            <rect x="<?= sprintf('%.2F', $x1) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['lwbp'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['lwbp'] / $tarif7['ymax']) ?>" fill="var(--ems-steel-400)" />
+            <rect x="<?= sprintf('%.2F', $x2) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['wbp'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['wbp'] / $tarif7['ymax']) ?>" fill="var(--ems-amber)" />
+            <rect x="<?= sprintf('%.2F', $x3) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['total'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['total'] / $tarif7['ymax']) ?>" fill="var(--ems-ink)" />
+            <?php endforeach; ?>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mt-1 flex">
+        <div class="w-12 shrink-0"></div>
+        <div class="relative min-w-0 flex-1 h-4">
+          <?php foreach ($tarif7['days'] as $i => $d): ?>
+          <span class="absolute top-0 -translate-x-1/2 text-[10px] tabular-nums text-ems-muted" style="left:<?= sprintf('%.2F%%', ($i + 0.5) * 100 / $n7) ?>"><?= html_escape($d['lbl']) ?></span>
+          <?php endforeach; ?>
+        </div>
+      </div>
+
+      <div class="mt-3 grid grid-cols-3 gap-2 sm:gap-4">
+        <?php $t7 = $tarif7['stat']; foreach (array('max' => 'Tertinggi', 'avg' => 'Rata-rata', 'min' => 'Terendah') as $fld => $tl): ?>
+        <div class="min-w-0">
+          <span class="block text-[10px] text-ems-muted"><?= $tl ?></span>
+          <span class="block truncate tabular-nums text-ems-ink">
+            <span class="text-[11px] font-normal text-ems-muted">Rp </span><span class="font-semibold"><?= $tarif_num($t7[$fld], 0) ?></span>
+            <?php if ($fld !== 'avg'): ?>
+            <span class="text-[10px] font-normal text-ems-muted"><?= html_escape($t7['r' . $fld]) ?></span>
+            <?php endif; ?>
+          </span>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <p class="border-t border-ems-line px-4 py-3 text-[11px] text-ems-muted md:px-6">
+      Bar Total = bar LWBP + bar WBP · Skala tetap Rp 0–10 juta · Total 7 hari Rp <?= $tarif_num($tarif7['sum'], 0) ?> · Estimasi biaya energi — belum termasuk RM, kVArh, PPN, PPJ, materai · Data dummy — data harian nyata menunggu fase 2.
+    </p>
   </div>
 
   <!-- L-T fase 1: kartu Tren 24 Jam (dummy, statis) -->

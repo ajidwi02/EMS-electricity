@@ -128,6 +128,8 @@ class Ems extends CI_Controller {
   //          plans/ems-lvmdp-tarif-kemarin.md; rumus plans/perhitungan-tarif-listrik-wbp-lwbp.md §3.2B).
   //        + kartu "Power Hari Ini" dummy (P-H fase 1 — kontrak §2
   //          plans/ems-lvmdp-power-hari-ini.md; skala Y 0-600 kW pin user).
+  //        + kartu "Total Tarif Harian" dummy (T-T-H fase 1 — kontrak §2
+  //          plans/ems-lvmdp-total-tarif-harian.md; skala Y Rp 0-10 juta pin user).
   public function lvmdp()
   {
     $this->config->load('ems', TRUE);
@@ -140,6 +142,7 @@ class Ems extends CI_Controller {
       'trends'      => $this->trend_dummy(),
       'tarif'       => $this->tarif_kemarin_dummy(),
       'power'       => $this->power_today_dummy(),
+      'tarif7'      => $this->tarif7_harian_dummy(),
     );
     $this->render('lvmdp', 'lvmdp', 'LVMDP', 'Monitoring Low Voltage Main Distribution Panel', $extra);
   }
@@ -328,6 +331,83 @@ class Ems extends CI_Controller {
       'biaya_total' => $b_l + $b_w,
       'rate_l'      => $rate_l,
       'k'           => $k_wbp,
+    );
+  }
+
+  // T-T-H fase 1: dummy "Total Tarif Harian" — grouped bar chart 7 hari (3 bar/hari:
+  // LWBP, WBP, Total = LWBP + WBP) dari konstanta dummy (spec §4
+  // plans/ems-lvmdp-total-tarif-harian.md). Skala Rp 0-10.000.000 pin user LOCKED
+  // ("Rp 10M" = 10 juta). Tanggal 7 hari dinamis (tertua -> hari ini di kanan) via
+  // DateTime Asia/Jakarta (GR-05 — TANPA date()). Total TIDAK pernah ditulis
+  // hardcode. Data nyata per blok menunggu T-T-H fase 2 (spec §12).
+  private function tarif7_harian_dummy()
+  {
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+
+    // Dummy KONSTANTA: pasangan [LWBP, WBP] per offset hari (6 = 6 hari lalu … 0 = hari ini).
+    // DILARANG mengganti nilai tanpa checkpoint (spec §4.1).
+    $konst = array(
+      6 => array(3412000, 918000),
+      5 => array(3150000, 850000),
+      4 => array(3664000, 1012000),
+      3 => array(4842000, 1486000),
+      2 => array(6012000, 2188000),
+      1 => array(4326000, 1238000),
+      0 => array(3918000, 1106000),
+    );
+
+    $lbl = function ($dt) use ($bulan) {
+      return $dt->format('j') . ' ' . $bulan[(int) $dt->format('n')];
+    };
+
+    $days = array();
+    $sum  = 0;
+    foreach (array(6, 5, 4, 3, 2, 1, 0) as $i) {
+      $dt   = new DateTime($i === 0 ? 'today' : '-' . $i . ' days', $tz);
+      $lwbp = $konst[$i][0];
+      $wbp  = $konst[$i][1];
+      $days[] = array('lbl' => $lbl($dt), 'lwbp' => $lwbp, 'wbp' => $wbp,
+                      'total' => $lwbp + $wbp);
+      $sum += $lwbp + $wbp;
+    }
+
+    // Statistik: nilai PERTAMA yang menang (pola $stat trend_dummy)
+    $max  = $days[0]['total'];
+    $min  = $days[0]['total'];
+    $imax = 0;
+    $imin = 0;
+    foreach ($days as $k => $row) {
+      if ($row['total'] > $max) { $max = $row['total']; $imax = $k; }
+      if ($row['total'] < $min) { $min = $row['total']; $imin = $k; }
+    }
+
+    // Label periode header — 3 cabang: lintas tahun / lintas bulan / satu bulan (GR-05)
+    $f   = new DateTime('-6 days', $tz);
+    $l   = new DateTime('today', $tz);
+    $f_m = (int) $f->format('n');
+    $f_y = (int) $f->format('Y');
+    $l_m = (int) $l->format('n');
+    $l_y = (int) $l->format('Y');
+    if ($f_y !== $l_y) {
+      $tgl_lbl = $lbl($f) . ' ' . $f_y . ' – ' . $lbl($l) . ' ' . $l_y . ' (WIB)';
+    } elseif ($f_m !== $l_m) {
+      $tgl_lbl = $lbl($f) . ' – ' . $lbl($l) . ' ' . $l_y . ' (WIB)';
+    } else {
+      $tgl_lbl = $f->format('j') . '–' . $l->format('j') . ' ' . $bulan[$l_m]
+               . ' ' . $l_y . ' (WIB)';
+    }
+
+    return array(
+      'tgl'   => $tgl_lbl,
+      'ymin'  => 0.0,
+      'ymax'  => 10000000.0,   // LOCKED (user): "Rp 10M" = Rp 10.000.000
+      'ystep' => 2000000.0,
+      'days'  => $days,
+      'stat'  => array('max' => $max, 'rmax' => $days[$imax]['lbl'],
+                       'avg' => $sum / 7, 'min' => $min, 'rmin' => $days[$imin]['lbl']),
+      'sum'   => $sum,
     );
   }
 
