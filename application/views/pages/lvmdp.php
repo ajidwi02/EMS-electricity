@@ -178,7 +178,7 @@ $tarif_num = function ($v, $dec) {
       </span>
       <span class="truncate text-xs font-medium uppercase tracking-wider text-ems-muted">Daya &amp; Energi</span>
     </div>
-    <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
       <div class="flex min-w-0 flex-col gap-1">
         <span class="text-xs text-ems-muted">PF</span>
         <span class="truncate text-xl font-semibold tabular-nums"><span data-f="pf" data-dec="2">-</span></span>
@@ -190,6 +190,10 @@ $tarif_num = function ($v, $dec) {
       <div class="flex min-w-0 flex-col gap-1">
         <span class="text-xs text-ems-muted">kWh</span>
         <span class="truncate text-xl font-semibold tabular-nums"><span data-f="Kwh" data-dec="1">-</span> <span class="text-xs font-normal text-ems-muted">kWh</span></span>
+      </div>
+      <div class="flex min-w-0 flex-col gap-1">
+        <span class="text-xs text-ems-muted">Freq (Hz)</span>
+        <span class="truncate text-xl font-semibold tabular-nums"><span data-f="Hz" data-dec="2">-</span></span>
       </div>
     </div>
   </div>

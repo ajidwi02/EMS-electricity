@@ -47,3 +47,6 @@ skills-lock.json
 # CI3 local DB credentials (issue: plans/ems-database-schema.md §0.2 rule 5)
 # Adapt after fresh clone: fill in hostname/username/password/database locally.
 application/config/database.php
+
+# EMS runtime artifacts - never push (worker stdout/stderr, housekeeping)
+storage/

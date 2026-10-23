@@ -39,14 +39,6 @@ function ems_nav_class($key, $active) {
         <i data-lucide="zap" class="size-5 shrink-0"></i>
         <span class="truncate">LVMDP</span>
       </a>
-      <a data-nav href="<?= site_url('puma') ?>" class="<?= ems_nav_class('puma', $active) ?>">
-        <i data-lucide="activity" class="size-5 shrink-0"></i>
-        <span class="truncate">Puma</span>
-      </a>
-      <a data-nav href="<?= site_url('nagai') ?>" class="<?= ems_nav_class('nagai', $active) ?>">
-        <i data-lucide="boxes" class="size-5 shrink-0"></i>
-        <span class="truncate">Nagai</span>
-      </a>
     </div>
 
     <div class="flex flex-col gap-1">

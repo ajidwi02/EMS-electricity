@@ -217,12 +217,12 @@ final class MqttRecorder
     public $db;
     public $panels = array();
     private $buffer = array();
-    private $metricsKeys = array('v_r', 'v_s', 'v_t', 'v_rs', 'v_st', 'v_rt', 'i_r', 'i_s', 'i_t', 'pf', 'kw', 'kwh');
+    private $metricsKeys = array('v_r', 'v_s', 'v_t', 'v_rs', 'v_st', 'v_rt', 'i_r', 'i_s', 'i_t', 'pf', 'kw', 'kwh', 'hz');
     private $upsertSql = 'INSERT INTO `readings`'
         . ' (`panel_id`, `recorded_at`, `terminal_time`,'
         . '  `v_r`, `v_s`, `v_t`, `v_rs`, `v_st`, `v_rt`,'
-        . '  `i_r`, `i_s`, `i_t`, `pf`, `kw`, `kwh`)'
-        . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        . '  `i_r`, `i_s`, `i_t`, `pf`, `kw`, `kwh`, `hz`)'
+        . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         . ' ON DUPLICATE KEY UPDATE'
         . '  `terminal_time` = VALUES(`terminal_time`),'
         . '  `v_r`  = VALUES(`v_r`),'
@@ -236,7 +236,8 @@ final class MqttRecorder
         . '  `i_t`  = VALUES(`i_t`),'
         . '  `pf`   = VALUES(`pf`),'
         . '  `kw`   = VALUES(`kw`),'
-        . '  `kwh`  = VALUES(`kwh`)';
+        . '  `kwh`  = VALUES(`kwh`),'
+        . '  `hz`   = VALUES(`hz`)';
     public $counters = array('msg' => 0, 'kept' => 0, 'oversize' => 0, 'bad_json' => 0);
 
     public function connectDb()
@@ -345,14 +346,14 @@ final class MqttRecorder
                 isset($b['minute']) ? (string) $b['minute'] : $now->format('Y-m-d H:i:00'),
                 $b['terminal'] !== NULL ? (string) $b['terminal'] : NULL,
                 $b['v_r'], $b['v_s'], $b['v_t'], $b['v_rs'], $b['v_st'], $b['v_rt'],
-                $b['i_r'], $b['i_s'], $b['i_t'], $b['pf'], $b['kw'], $b['kwh'],
+                $b['i_r'], $b['i_s'], $b['i_t'], $b['pf'], $b['kw'], $b['kwh'], $b['hz'],
             );
             $bindings = $args;
             $refs = array();
             foreach ($bindings as $k => $v) {
                 $refs[$k] = &$bindings[$k];
             }
-            array_unshift($refs, 'iss' . str_repeat('d', 12));
+            array_unshift($refs, 'iss' . str_repeat('d', 13));
             call_user_func_array(array($this->stmt, 'bind_param'), $refs);
             if ($this->stmt->execute() === FALSE) {
                 fwrite(STDERR, '[' . date('H:i:s') . '] flush gagal panel=' . $group . ' : ' . $this->stmt->error . "\n");
@@ -384,6 +385,12 @@ final class MqttRecorder
                 } elseif (isset($data['kwh'])) {
                     $val = $data['kwh'];
                 }
+            } elseif ($key === 'hz') {
+                if (isset($data['Hz'])) {
+                    $val = $data['Hz'];
+                } elseif (isset($data['hz'])) {
+                    $val = $data['hz'];
+                }
             } elseif (isset($data[$key])) {
                 $val = $data[$key];
             }
@@ -396,6 +403,9 @@ final class MqttRecorder
             } elseif ($apf > 1000) {
                 $row['pf'] = NULL;
             }
+        }
+        if ($row['hz'] !== NULL && ($row['hz'] < 0 || $row['hz'] > 999)) {
+            $row['hz'] = NULL;
         }
         return $row;
     }
@@ -502,7 +512,7 @@ try {
             $tot = $lastRow->fetch_assoc();
             ems_say('readings.total = ' . (int) $tot['total']);
             $lastRow->free();
-            $show = $rec->db->query('SELECT id, panel_id, recorded_at, terminal_time, v_r, v_s, v_t, pf, kw, kwh FROM readings ORDER BY id DESC LIMIT 1');
+            $show = $rec->db->query('SELECT id, panel_id, recorded_at, terminal_time, v_r, v_s, v_t, pf, kw, kwh, hz FROM readings ORDER BY id DESC LIMIT 1');
             if ($show instanceof mysqli_result) {
                 $row = $show->fetch_assoc();
                 if ($row) {

@@ -1,0 +1,21 @@
+# Normalize line endings: repository stores LF, checkouts export LF.
+# This overrides each developer's core.autocrlf and stops
+# "LF will be replaced by CRLF" churn on shared files.
+* text=auto eol=lf
+
+# Windows-only / generated scripts (if any appear later)
+# *.bat text eol=crlf
+# *.ps1 text eol=crlf
+
+# Binaries - never normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary

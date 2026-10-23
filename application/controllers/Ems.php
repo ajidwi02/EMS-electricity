@@ -2,9 +2,9 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
- * EMS — Energy Management System
- * Satu controller untuk 5 halaman blank MVP:
- * Dashboard, LVMDP, Puma, Nagai, Export Data.
+ * EMS — Energy Monitoring System
+ * Halaman aktif: Dashboard, LVMDP, Export Data.
+ * Puma & Nagai diblokir (CP-036, instruksi user) — dibuka lagi di M3.
  */
 class Ems extends CI_Controller {
 
@@ -411,14 +411,18 @@ class Ems extends CI_Controller {
     );
   }
 
+  // CP-036: DIBLOKIR atas instruksi user — menu sidebar + rute dimatikan,
+  // semua bentuk akses (short, legacy /ems/*, default-routing) -> 404.
+  // Buka lagi di milestone M3: kembalikan rute + body render di bawah ini.
   public function puma()
   {
-    $this->render('puma', 'puma', 'Puma', 'Monitoring panel / area Puma');
+    show_404();
   }
 
+  // CP-036: DIBLOKIR — lihat komentar puma().
   public function nagai()
   {
-    $this->render('nagai', 'nagai', 'Nagai', 'Monitoring panel / area Nagai');
+    show_404();
   }
 
   // M4 fase 4a-2 + 4b: tabel historis dari DB `ems` + filter periode

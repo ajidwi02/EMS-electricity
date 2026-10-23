@@ -30,10 +30,5 @@
       <span class="live-dot size-2 shrink-0 rounded-full bg-ems-ok"></span>
       <span id="ems-clock-text" aria-live="off"><?= html_escape($ems_clock) ?></span>
     </span>
-    <div class="h-6 w-px bg-ems-line" role="separator"></div>
-    <div class="flex items-center gap-2">
-      <div class="flex size-8 items-center justify-center rounded-full bg-graphite-950 text-[11px] font-bold text-white">AD</div>
-      <span class="hidden text-sm font-medium md:inline">Admin</span>
-    </div>
   </div>
 </header>

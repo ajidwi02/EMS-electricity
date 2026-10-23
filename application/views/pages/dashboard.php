@@ -1,12 +1,7 @@
 <?php defined('BASEPATH') OR exit('No direct script access allowed');
 // Halaman: Dashboard — LIVE dari DB `ems` (CP-016): KPI + grafik kW/jam + ringkasan panel.
-
-// --- badge header: periode WIB hari ini (GR-05) ----------------------------
-$tl_now   = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
-$tl_bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
-                  7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
-$badge = '<span class="inline-flex items-center gap-2 rounded-full border border-ems-line bg-white px-3 py-1.5 text-xs font-medium text-ems-muted"><span class="live-dot size-2 rounded-full bg-ems-ok"></span>Periode: Hari ini · ' . $tl_now->format('j') . ' ' . $tl_bulan[(int) $tl_now->format('n')] . ' ' . $tl_now->format('Y') . '</span>';
-$this->load->view('partials/page_header', array('title' => $title, 'subtitle' => $subtitle, 'action' => $badge));
+// CP-037: badge "Periode: Hari ini · ..." dihapus — page_header tidak dipanggil lagi
+// (partial tetap dipakai export_data untuk slot tombol Export).
 
 // --- helper format: NULL -> em-dash (aturan "NULL = no data", bukan 0) -----
 $fmt = function ($v, $dec = 1) {
