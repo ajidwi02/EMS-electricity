@@ -121,13 +121,13 @@ class Ems extends CI_Controller {
     ));
   }
 
-  // /ems/lvmdp, /ems/lvmDP, /ems/LVMDP semua masuk sini (PHP method case-insensitive).
   // /lvmdp = gauge MQTT realtime (TIDAK berubah, CP-006…CP-008)
-  //        + kartu "Tren 24 Jam" dummy (L-T fase 1, CP-020 — kontrak §2.5 plans/ems-lvmdp-trend-charts.md)
+  //        + kartu "Tren 24 Jam" DB-DINAMIS (L-T fase 2 — 3 sub-chart
+  //          Tegangan Fasa (L-N) / Tegangan Antar Fasa (L-L) / Arus; sumber
+  //          ems.data_electricity_iot5, kontrak §SS2-D6 plans/ems-lvmdp-db-trend.md)
   //        + kartu "Konsumsi & Tarif Hari Kemarin" dummy (K-T fase 1 — kontrak §2.3
   //          plans/ems-lvmdp-tarif-kemarin.md; rumus plans/perhitungan-tarif-listrik-wbp-lwbp.md §3.2B).
-  //        + kartu "Power Hari Ini" dummy (P-H fase 1 — kontrak §2
-  //          plans/ems-lvmdp-power-hari-ini.md; skala Y 0-600 kW pin user).
+  //        + kartu "Power Hari Ini" DB-DINAMIS (P-H fase 2; skala Y 0-600 kW pin user LOCKED).
   //        + kartu "Total Tarif Harian" dummy (T-T-H fase 1 — kontrak §2
   //          plans/ems-lvmdp-total-tarif-harian.md; skala Y Rp 0-10 juta pin user).
   public function lvmdp()
@@ -139,154 +139,191 @@ class Ems extends CI_Controller {
       'mqtt_topic'  => (is_array($ems) && isset($ems['ems_mqtt_topic'])) ? $ems['ems_mqtt_topic'] : 'data/ems/lvmdp/+',
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
-      'trends'      => $this->trend_dummy(),
+      'day_payload' => $this->lvmdp_day_payload(),
       'tarif'       => $this->tarif_kemarin_dummy(),
-      'power'       => $this->power_today_dummy(),
       'tarif7'      => $this->tarif7_harian_dummy(),
     );
+    $extra['trends'] = $extra['day_payload'];
+    $extra['power']  = $extra['day_payload']['power'];
+    $extra['trends_json'] = json_encode($extra['day_payload']);
+    $extra['trends_json'] = str_replace(array('<', '>'), array('\\u003c', '\\u003e'), $extra['trends_json']);
     $this->render('lvmdp', 'lvmdp', 'LVMDP', 'Monitoring Low Voltage Main Distribution Panel', $extra);
   }
 
-  // L-T: data dummy Tren 24 Jam — deterministik, 289 titik (00:00..24:00, 5 menit).
-  // Cerita beban mengikuti spec induk §1: malam ringan -> lonjakan ~08:12 ->
-  // piringan siang -> naik tipis saat WBP. Tegangan antikorelasi beban; arus T terendah.
-  private function trend_dummy()
+  // L-T/P-H fase 2: payload chart 1 hari dari ems.data_electricity_iot5 (kontrak SS2-D6
+  // plans/ems-lvmdp-db-trend.md). Skala & refs pindah ke payload (SSR + JS
+  // satu kontrak). pts = pair [menitSejak00:00, nilai], HANYA baris non-NULL
+  // per kolom; stat dari titik tercatat; peak pakai skema dummy cpx/cpy/x/y/cy.
+  private function lvmdp_day_payload()
   {
+    $this->load->model('Readings_model');
     $tz    = new DateTimeZone('Asia/Jakarta');
-    $tgl   = new DateTime('today', $tz);
     $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
                    7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
-    $tgl_lbl = $tgl->format('j') . ' ' . $bulan[(int) $tgl->format('n')] . ' '
-             . $tgl->format('Y') . ' (WIB)';
+    $today   = new DateTime('today', $tz);
+    $tgl_lbl = $today->format('j') . ' ' . $bulan[(int) $today->format('n')] . ' '
+             . $today->format('Y') . ' (WIB)';
 
-    $clamp = function ($v, $lo, $hi) {
-      if ($v < $lo) return $lo;
-      if ($v > $hi) return $hi;
-      return $v;
+    $pid  = $this->Readings_model->panel_id_by_code('lvmdp');
+    $rows = ($pid === NULL) ? array() : $this->Readings_model->day_series($pid);
+
+    $mken = function ($row) {
+      // recorded_at 'Y-m-d H:i:s[.v]' -> menit sejak 00:00 WIB
+      $h = (int) substr($row['recorded_at'], 11, 2);
+      $m = (int) substr($row['recorded_at'], 14, 2);
+      return $h * 60 + $m;
     };
 
-    $n = 288; // interval; 289 titik = 00:00 + n x 5 menit
-    $series = array('r' => array(), 's' => array(), 't' => array(),
-                    'rs' => array(), 'st' => array(), 'rt' => array(),
-                    'ir' => array(), 'is' => array(), 'it' => array());
-    $times  = array(); // label 'HH:MM' per titik (WIB)
+    $charts = array();
+    // skala dasar & refs: nilai PERSIS $trend_defs lama (LOCKED CP-018/025);
+    // skala efektif 3 chart tren menyesuaikan data (amandemen CP-049)
+    $charts['ln'] = $this->day_chart($rows, array('R' => 'v_r', 'S' => 'v_s', 'T' => 'v_t'), 2,
+      'Tegangan Fasa (L-N)', 'Volt (V)', 190.0, 240.0, 10.0, array(
+        array('v' => 231.0, 'label' => 'Batas +5% 231',  'c' => '#9AA1AD'),
+        array('v' => 220.0, 'label' => 'Nominal 220',    'c' => '#6B7280'),
+        array('v' => 198.0, 'label' => 'Batas −10% 198', 'c' => '#9AA1AD'),
+      ), $mken);
+    $charts['ll'] = $this->day_chart($rows, array('R' => 'v_rs', 'S' => 'v_st', 'T' => 'v_rt'), 2,
+      'Tegangan Antar Fasa (L-L)', 'Volt (V)', 330.0, 420.0, 10.0, array(
+        array('v' => 399.0, 'label' => 'Batas +5% 399',  'c' => '#9AA1AD'),
+        array('v' => 380.0, 'label' => 'Nominal 380',    'c' => '#6B7280'),
+        array('v' => 342.0, 'label' => 'Batas −10% 342', 'c' => '#9AA1AD'),
+      ), $mken);
+    $charts['a'] = $this->day_chart($rows, array('R' => 'i_r', 'S' => 'i_s', 'T' => 'i_t'), 0,
+      'Arus', 'Ampere (A)', 0.0, 1200.0, 200.0, array(
+        array('v' => 1000.0, 'label' => 'Nominal FLA 1000', 'c' => '#C2410C'),
+      ), $mken);
 
-    for ($i = 0; $i <= $n; $i++) {
-      $h    = $i / 12;
-      $b1   = exp(-0.5 * pow(($h - 8.2) / 0.45, 2));
-      $b2   = exp(-0.5 * pow(($h - 13.0) / 2.0, 2));
-      $b3   = exp(-0.5 * pow(($h - 19.5) / 1.1, 2));
-      $load = 300 + 520 * $b1 + 250 * $b2 + 90 * $b3;
-      $vln  = 229.6 - 9.2 * ($load / 870);
-      $vll  = 1.7320508 * $vln;
-
-      $series['r'][]  = $clamp($vln + 1.10 * sin($i / 24) + 0.40, 190, 240);
-      $series['s'][]  = $clamp($vln + 0.90 * cos($i / 21), 190, 240);
-      $series['t'][]  = $clamp($vln + 1.05 * sin($i / 27), 190, 240);
-      $series['rs'][] = $clamp($vll + 1.80 * sin($i / 17) + 1.80, 330, 420);
-      $series['st'][] = $clamp($vll + 1.50 * cos($i / 15), 330, 420);
-      $series['rt'][] = $clamp($vll + 1.40 * sin($i / 19), 330, 420);
-      $series['ir'][] = $clamp($load * (1.035 + 0.025 * sin($i / 13.7)), 0, 1200);
-      $series['is'][] = $clamp($load * (0.975 + 0.025 * cos($i / 11.3)), 0, 1200);
-      $series['it'][] = $clamp($load * (0.930 + 0.025 * sin($i / 9.1)), 0, 1200);
-
-      $mins    = $i * 5; // menit sejak 00:00
-      $times[] = sprintf('%02d:%02d', intdiv($mins, 60), $mins % 60);
-    }
-
-    $round = function ($a) {
-      $b = array();
-      foreach ($a as $v) { $b[] = round($v, 2); }
-      return $b;
-    };
-    $stat = function ($vals, $times) {
-      $min = $vals[0]; $max = $vals[0]; $imin = 0; $imax = 0; $sum = 0.0;
-      foreach ($vals as $k => $v) {
-        if ($v < $min) { $min = $v; $imin = $k; }
-        if ($v > $max) { $max = $v; $imax = $k; }
-        $sum += $v;
+    $power = $this->day_chart($rows, array('K' => 'kw'), 2,
+      'Power Hari Ini', 'kW', 0.0, 600.0, 100.0, array(), $mken, FALSE);
+    $peakK = $power['series']['K'];
+    $power['scale'] = array('ymin' => 0.0, 'ymax' => 600.0, 'ystep' => 100.0, 'refs' => array());
+    $power['pts']  = $peakK['pts'];
+    $power['stat'] = $peakK['stat'];
+    $power['tgl']  = $tgl_lbl;
+    $peak = array('val' => NULL, 't' => '-', 'cpx' => '0.00', 'cpy' => '300.00', 'x' => '0.00', 'y' => '100.00', 'cy' => '97.00');
+    if (count($peakK['pts']) > 0) {
+      $pmax = $peakK['pts'][0]; $tmax = $pmax[0]; $vmax = $pmax[1];
+      foreach ($peakK['pts'] as $p) {
+        if ($p[1] > $vmax) { $vmax = $p[1]; $tmax = $p[0]; }
       }
-      return array('min' => $min, 'rmin' => $times[$imin], 'max' => $max,
-                   'rmax' => $times[$imax], 'avg' => $sum / count($vals));
-    };
-    $mk = function ($key) use ($series, $times, $round, $stat) {
-      $v = $round($series[$key]);
-      return array('vals' => $v) + $stat($v, $times);
-    };
+      $px = 800.0 * $tmax / 1440.0;
+      $py = 300.0 - 300.0 * $vmax / 600.0;
+      $peak['val'] = $vmax;
+      $peak['t']   = sprintf('%02d:%02d', intdiv($tmax, 60), $tmax % 60);
+      $peak['cpx'] = sprintf('%.2F', $px);
+      $peak['cpy'] = sprintf('%.2F', $py);
+      $peak['x']   = sprintf('%.2F', 100.0 * $tmax / 1440.0);
+      $peak['y']   = sprintf('%.2F', 100.0 * (1 - $vmax / 600.0));
+      $peak['cy']  = sprintf('%.2F', 100.0 * (1 - $vmax / 600.0) - 3);
+    }
+    $power['peak'] = $peak;
 
     return array(
-      'tgl' => $tgl_lbl,
-      'charts' => array(
-        'ln' => array('title' => 'Tegangan Fasa (L-N)', 'unit' => 'Volt (V)',
-          'series' => array('R' => $mk('r'), 'S' => $mk('s'), 'T' => $mk('t'))),
-        'll' => array('title' => 'Tegangan Antar Fasa (L-L)', 'unit' => 'Volt (V)',
-          'series' => array('R' => $mk('rs'), 'S' => $mk('st'), 'T' => $mk('rt'))),
-        'a'  => array('title' => 'Arus', 'unit' => 'Ampere (A)',
-          'series' => array('R' => $mk('ir'), 'S' => $mk('is'), 'T' => $mk('it'))),
-      ),
+      'day'    => $today->format('Y-m-d'),
+      'tgl'    => $tgl_lbl,
+      'n'      => count($rows),
+      'charts' => $charts,
+      'power'  => $power,
     );
   }
 
-  // P-H fase 1: dummy "Power Hari Ini" — 1 line chart, 289 titik (00:00..24:00, 5 menit),
-  // skala tetap 0-600 kW (pin user, LOCKED). Deterministik: lantai malam 300 kW (senada
-  // dasar cerita kartu Tren) + lonjakan pagi-siang + puncak WBP + ripple harmonik kecil.
-  // Display saja; sumber data nyata menunggu P-H fase 2 (spec §12).
-  private function power_today_dummy()
+  // Seri per-kolom -> series {R,S,T} / {K}: pts ASC menit + stat (nilai PERTAMA
+  // menang pada tie, pola dummy $stat) atau '-' bila kosong.
+  private function day_chart($rows, $map, $dec, $title, $unit, $ymin, $ymax, $ystep, $refs, $mken, $adaptive = TRUE)
   {
-    $tz    = new DateTimeZone('Asia/Jakarta');
-    $tgl   = new DateTime('today', $tz);
-    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
-                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
-    $tgl_lbl = $tgl->format('j') . ' ' . $bulan[(int) $tgl->format('n')] . ' '
-             . $tgl->format('Y') . ' (WIB)';
-
-    $n    = 288;         // interval 5 menit -> 289 titik (00:00..24:00)
-    $ymax = 600.0;       // LOCKED (user) — jangan auto-fit
-    $ymin = 0.0;
-
-    $vals  = array();
-    $times = array();
-    for ($i = 0; $i <= $n; $i++) {
-      $h  = $i / 12;                                   // jam desimal 0..24
-      $g1 = exp(-0.5 * pow(($h - 10.5) / 1.90, 2));    // lonjakan pagi-siang
-      $g2 = exp(-0.5 * pow(($h - 19.6) / 1.15, 2));    // puncak WBP (beban malam)
-      $pw = 300.0 + 140.0 * $g1 + 120.0 * $g2
-          + 7.0 * sin($i / 11.0) + 3.5 * sin($i / 23.0);  // ripple kecil
-      $vals[]  = round($pw, 2);
-      $mins    = $i * 5;
-      $times[] = sprintf('%02d:%02d', intdiv($mins, 60), $mins % 60);
+    $series = array();
+    foreach ($map as $sk => $col) {
+      $pts = array();
+      $sum = 0.0;
+      $vmin = $vmax = NULL;
+      $imin = $imax = 0;
+      foreach ($rows as $row) {
+        if (!array_key_exists($col, $row) || $row[$col] === NULL) {
+          continue;
+        }
+        $m = $mken($row);
+        $v = round((float) $row[$col], $dec);
+        $pts[] = array($m, $v);
+        if ($vmin === NULL || $v < $vmin) { $vmin = $v; $imin = count($pts) - 1; }
+        if ($vmax === NULL || $v > $vmax) { $vmax = $v; $imax = count($pts) - 1; }
+        $sum += $v;
+      }
+      if (count($pts) === 0) {
+        $series[$sk] = array('pts' => array(), 'stat' => array(
+          'min' => NULL, 'rmin' => '-', 'max' => NULL, 'rmax' => '-', 'avg' => NULL));
+      } else {
+        $series[$sk] = array('pts' => $pts, 'stat' => array(
+          'min' => $vmin, 'rmin' => sprintf('%02d:%02d', intdiv($pts[$imin][0], 60), $pts[$imin][0] % 60),
+          'max' => $vmax, 'rmax' => sprintf('%02d:%02d', intdiv($pts[$imax][0], 60), $pts[$imax][0] % 60),
+          'avg' => round($sum / count($pts), ($dec === 0) ? 0 : 2)));
+      }
     }
-
-    // Statistik: nilai PERTAMA yang menang (pola konsisten $stat trend_dummy)
-    $min = $vals[0]; $max = $vals[0]; $imin = 0; $imax = 0; $sum = 0.0;
-    foreach ($vals as $k => $v) {
-      if ($v < $min) { $min = $v; $imin = $k; }
-      if ($v > $max) { $max = $v; $imax = $k; }
-      $sum += $v;
-    }
-    $stat = array('min' => $min, 'rmin' => $times[$imin], 'avg' => $sum / 289,
-                  'max' => $max, 'rmax' => $times[$imax]);
-
-    // Puncak global: persen utk chip + koordinat svg utk titik ink
-    $peak = array(
-      'x'   => sprintf('%.2F', ($imax / $n) * 100),
-      'y'   => sprintf('%.2F', (1 - $vals[$imax] / $ymax) * 100),
-      'cy'  => sprintf('%.2F', (1 - $vals[$imax] / $ymax) * 100 - 3),
-      'cpx' => sprintf('%.2F', 800 * $imax / $n),
-      'cpy' => sprintf('%.2F', 300 - 300 * $vals[$imax] / $ymax),
-      'val' => $vals[$imax],
-      't'   => $times[$imax],
+    return array(
+      'title'  => $title,
+      'unit'   => $unit,
+      'scale'  => $adaptive
+        ? $this->adaptive_scale($series, $ymin, $ymax, $ystep, $ymax, $refs)
+        : array('ymin' => $ymin, 'ymax' => $ymax, 'ystep' => $ystep, 'refs' => $refs),
+      'series' => $series,
     );
+  }
+
+  private function adaptive_scale($series, $ymin, $ymax, $ystep, $limit = NULL, $refs = array())
+  {
+    $data_min = NULL;
+    $data_max = NULL;
+    foreach ((array) $series as $item) {
+      foreach (isset($item['pts']) ? $item['pts'] : array() as $pt) {
+        if (!is_array($pt) || count($pt) < 2) { continue; }
+        $v = (float) $pt[1];
+        if ($data_min === NULL || $v < $data_min) { $data_min = $v; }
+        if ($data_max === NULL || $v > $data_max) { $data_max = $v; }
+      }
+    }
+
+    $eff_min = (float) $ymin;
+    $eff_max = (float) $ymax;
+    $headroom = (float) $ystep * 0.5;
+    if ($data_min !== NULL && $data_min < $eff_min) {
+      $eff_min = floor(($data_min - $headroom) / $ystep) * $ystep;
+    }
+    if ($data_max !== NULL && $data_max > $eff_max) {
+      $eff_max = ceil(($data_max + $headroom) / $ystep) * $ystep;
+    }
+
+    $step = (float) $ystep;
+    while (($eff_max - $eff_min) / $step > 12.0) { $step *= 2.0; }
+    if ($step !== $ystep) {
+      $eff_min = floor($eff_min / $step) * $step;
+      $eff_max = ceil($eff_max / $step) * $step;
+    }
 
     return array(
-      'tgl'   => $tgl_lbl,
-      'ymin'  => $ymin,
-      'ymax'  => $ymax,
-      'ystep' => 100.0,
-      'vals'  => $vals,
-      'stat'  => $stat,
-      'peak'  => $peak,
+      'ymin'      => (float) $eff_min,
+      'ymax'      => (float) $eff_max,
+      'ystep'     => (float) $step,
+      'refs'      => (array) $refs,
+      'base_min'  => (float) $ymin,
+      'limit'     => (float) ($limit === NULL ? $ymax : $limit),
+      'expanded'  => (abs($eff_min - (float) $ymin) > 0.001 || abs($eff_max - (float) $ymax) > 0.001),
+      'data_min'  => $data_min,
+      'data_max'  => $data_max,
     );
+  }
+
+  public function lvmdp_trend()
+  {
+    if ((isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET') !== 'GET') {
+      header('Content-Type: application/json; charset=utf-8', TRUE, 405);
+      header('Allow: GET');
+      echo json_encode(array('error' => 'method not allowed'));
+      exit;
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode($this->lvmdp_day_payload());
+    exit;
   }
 
   // K-T fase 1: dummy "Konsumsi & Tarif Hari Kemarin" — deterministik (spec §4
@@ -373,7 +410,7 @@ class Ems extends CI_Controller {
       $sum += $lwbp + $wbp;
     }
 
-    // Statistik: nilai PERTAMA yang menang (pola $stat trend_dummy)
+    // Statistik: nilai PERTAMA yang menang (pola $stat lama — nilai pertama menang)
     $max  = $days[0]['total'];
     $min  = $days[0]['total'];
     $imax = 0;

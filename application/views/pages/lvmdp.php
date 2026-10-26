@@ -17,46 +17,38 @@ $a_gauges = array(
   array('f' => 'i_t', 'label' => 'I-T', 'aria' => 'Gauge I-T'),
 );
 
-// ── L-T fase 1: defs Tren 24 Jam — skala & referensi LOCKED §2.2–2.4 plans/ems-lvmdp-trend-charts.md ──
-$trend_defs = array(
-  'ln' => array(
-    'ymin' => 190, 'ymax' => 240, 'ystep' => 10,
-    'refs' => array(
-      array('v' => 231, 'label' => 'Batas +5% 231',  'c' => '#9AA1AD'),
-      array('v' => 220, 'label' => 'Nominal 220',    'c' => '#6B7280'),
-      array('v' => 198, 'label' => 'Batas −10% 198', 'c' => '#9AA1AD'),
-    ),
-  ),
-  'll' => array(
-    'ymin' => 330, 'ymax' => 420, 'ystep' => 10,
-    'refs' => array(
-      array('v' => 399, 'label' => 'Batas +5% 399',  'c' => '#9AA1AD'),
-      array('v' => 380, 'label' => 'Nominal 380',    'c' => '#6B7280'),
-      array('v' => 342, 'label' => 'Batas −10% 342', 'c' => '#9AA1AD'),
-    ),
-  ),
-  'a' => array(
-    'ymin' => 0, 'ymax' => 1200, 'ystep' => 200,
-    'refs' => array(
-      array('v' => 1000, 'label' => 'Nominal FLA 1000', 'c' => '#C2410C'),
-    ),
-  ),
-);
+// ── L-T/P-H fase 2: skala & refs & titik TERCATAT dari payload (kontrak SS2-D6
+// plans/ems-lvmdp-db-trend.md; amandemen CP-049: skala adaptif). $day_line:
+// pts [menit, nilai] -> polyline 800x300 (sumbu tetap 00:00–24:00: x = menit/1440*800;
+// y skala EFEKTIF dari chart payload — titik di luar skala tidak dipotong lagi).
+$day_line = function ($pts, $ymin, $ymax) {
+  $out = '';
+  foreach ((array) $pts as $p) {
+    if (count($p) < 2) { continue; }
+    $m = (float) $p[0];
+    $v = (float) $p[1];
+    $out .= sprintf('%.2F,%.2F ', ($m / 1440.0) * 800.0,
+      300.0 - 300.0 * (($v - $ymin) / ($ymax - $ymin)));
+  }
+  return rtrim($out);
+};
+// CP-049: null = '—' (bukan '-'); nilai di luar batas dasar skala diberi panah
+// ↑/↓ supaya tidak tertukar dengan data normal saat skala meluas.
+$dash_num = function ($v, $dec) { return ($v === NULL || $v === '') ? '—' : number_format((float) $v, $dec, '.', ''); };
+$trend_val = function ($v, $dec, $sc) use ($dash_num) {
+  $num = $dash_num($v, $dec);
+  if ($num === '—' || !isset($sc['limit'])) { return $num; }
+  $lim  = (float) $sc['limit'];
+  $base = isset($sc['base_min']) ? (float) $sc['base_min'] : $lim;
+  if ((float) $v > $lim + 0.0001)  { return $num . ' ↑'; }
+  if ((float) $v < $base - 0.0001) { return $num . ' ↓'; }
+  return $num;
+};
 $trend_style = array(
   'R' => array('var' => 'var(--ems-fasa-r)', 'dash' => ''),
   'S' => array('var' => 'var(--ems-fasa-s)', 'dash' => '10 4'),
   'T' => array('var' => 'var(--ems-ink)',    'dash' => '2 4'),
 );
-// polyline points 289 titik: x = i/288*800 · y = 300 − 300*(v−ymin)/(ymax−ymin)
-$trend_points = function ($vals, $ymin, $ymax) {
-  $last = count($vals) - 1;
-  $p    = '';
-  foreach ($vals as $i => $v) {
-    $p .= sprintf('%.2F,%.2F ', ($i / $last) * 800,
-      300 - 300 * (($v - $ymin) / ($ymax - $ymin)));
-  }
-  return rtrim($p);
-};
 $trend_num = function ($v, $dec = 1) {
   return number_format((float) $v, $dec, '.', '');
 };
@@ -72,13 +64,14 @@ $tarif_num = function ($v, $dec) {
   data-topic="<?php echo html_escape(isset($mqtt_topic) ? $mqtt_topic : 'data/ems/lvmdp/+'); ?>"
   data-user="<?php echo html_escape(isset($mqtt_user) ? $mqtt_user : ''); ?>"
   data-pass="<?php echo html_escape(isset($mqtt_pass) ? $mqtt_pass : ''); ?>"
+  data-refresh="<?php echo html_escape(site_url('lvmdp/trend')); ?>"
   class="flex flex-col gap-6">
 
   <details class="group rounded-lg border border-ems-line bg-white">
     <summary class="flex list-none cursor-pointer select-none items-center gap-3 px-4 py-3 md:px-6">
       <span id="lvmdp-dot" class="size-2 shrink-0 rounded-full bg-ems-muted"></span>
       <h2 class="truncate text-sm font-semibold">Status Koneksi</h2>
-      <span id="lvmdp-conn" class="ml-auto shrink-0 truncate text-xs text-ems-muted">Menghubungkan…</span>
+      <span id="lvmdp-conn" class="ml-auto min-w-0 truncate text-xs text-ems-muted">Menghubungkan…</span>
       <i data-lucide="chevron-down" class="size-4 shrink-0 text-ems-muted group-open:rotate-180"></i>
     </summary>
     <div class="flex flex-col gap-3 border-t border-ems-line px-4 py-4 md:flex-row md:items-center md:gap-6 md:px-6">
@@ -97,8 +90,8 @@ $tarif_num = function ($v, $dec) {
     </div>
   </details>
 
-  <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-    <div class="flex flex-col gap-3 rounded-lg border border-ems-line bg-white p-4">
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-3 md:gap-4">
+    <div class="flex min-w-0 flex-col gap-3 rounded-lg border border-ems-line bg-white p-4 sm:p-3 md:p-4">
       <div class="flex items-center gap-2">
         <span class="flex size-8 items-center justify-center rounded-lg bg-[#EFF0ED]">
           <i data-lucide="zap" class="size-4 text-ems-muted"></i>
@@ -107,10 +100,10 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex flex-col gap-5">
         <?php foreach ($ln_gauges as $g): ?>
-        <div class="flex items-center gap-4">
-          <svg class="gauge size-28 shrink-0" viewBox="0 0 120 70" role="img" aria-label="<?php echo html_escape($g['aria']); ?>" data-gauge="ln" data-f="<?php echo html_escape($g['f']); ?>"></svg>
+        <div class="flex items-center gap-4 sm:gap-2 md:gap-3 xl:gap-4">
+          <svg class="gauge size-28 shrink-0 sm:size-20 xl:size-28" viewBox="0 0 120 70" role="img" aria-label="<?php echo html_escape($g['aria']); ?>" data-gauge="ln" data-f="<?php echo html_escape($g['f']); ?>"></svg>
           <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-xs font-medium uppercase tracking-wider text-ems-muted"><?php echo html_escape($g['label']); ?></span>
+            <span class="text-xs font-medium uppercase leading-tight tracking-wider text-ems-muted"><?php echo html_escape($g['label']); ?></span>
             <span class="truncate text-xl font-semibold tabular-nums"><span data-f="<?php echo html_escape($g['f']); ?>" data-dec="1">-</span> <span class="text-xs font-normal text-ems-muted">V</span></span>
             <span class="flex items-center gap-2">
               <svg class="size-2 shrink-0" viewBox="0 0 8 8" aria-hidden="true"><circle id="dot-<?php echo html_escape($g['f']); ?>" cx="4" cy="4" r="4" fill="#9AA1AD"/></svg>
@@ -122,7 +115,7 @@ $tarif_num = function ($v, $dec) {
       </div>
     </div>
 
-    <div class="flex flex-col gap-3 rounded-lg border border-ems-line bg-white p-4">
+    <div class="flex min-w-0 flex-col gap-3 rounded-lg border border-ems-line bg-white p-4 sm:p-3 md:p-4">
       <div class="flex items-center gap-2">
         <span class="flex size-8 items-center justify-center rounded-lg bg-[#EFF0ED]">
           <i data-lucide="activity" class="size-4 text-ems-muted"></i>
@@ -131,10 +124,10 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex flex-col gap-5">
         <?php foreach ($ll_gauges as $g): ?>
-        <div class="flex items-center gap-4">
-          <svg class="gauge size-28 shrink-0" viewBox="0 0 120 70" role="img" aria-label="<?php echo html_escape($g['aria']); ?>" data-gauge="ll" data-f="<?php echo html_escape($g['f']); ?>"></svg>
+        <div class="flex items-center gap-4 sm:gap-2 md:gap-3 xl:gap-4">
+          <svg class="gauge size-28 shrink-0 sm:size-20 xl:size-28" viewBox="0 0 120 70" role="img" aria-label="<?php echo html_escape($g['aria']); ?>" data-gauge="ll" data-f="<?php echo html_escape($g['f']); ?>"></svg>
           <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-xs font-medium uppercase tracking-wider text-ems-muted"><?php echo html_escape($g['label']); ?></span>
+            <span class="text-xs font-medium uppercase leading-tight tracking-wider text-ems-muted"><?php echo html_escape($g['label']); ?></span>
             <span class="truncate text-xl font-semibold tabular-nums"><span data-f="<?php echo html_escape($g['f']); ?>" data-dec="1">-</span> <span class="text-xs font-normal text-ems-muted">V</span></span>
             <span class="flex items-center gap-2">
               <svg class="size-2 shrink-0" viewBox="0 0 8 8" aria-hidden="true"><circle id="dot-<?php echo html_escape($g['f']); ?>" cx="4" cy="4" r="4" fill="#9AA1AD"/></svg>
@@ -146,7 +139,7 @@ $tarif_num = function ($v, $dec) {
       </div>
     </div>
 
-    <div class="flex flex-col gap-3 rounded-lg border border-ems-line bg-white p-4">
+    <div class="flex min-w-0 flex-col gap-3 rounded-lg border border-ems-line bg-white p-4 sm:p-3 md:p-4">
       <div class="flex items-center gap-2">
         <span class="flex size-8 items-center justify-center rounded-lg bg-[#EFF0ED]">
           <i data-lucide="plug-zap" class="size-4 text-ems-muted"></i>
@@ -155,10 +148,10 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex flex-col gap-5">
         <?php foreach ($a_gauges as $g): ?>
-        <div class="flex items-center gap-4">
-          <svg class="gauge size-28 shrink-0" viewBox="0 0 120 70" role="img" aria-label="<?php echo html_escape($g['aria']); ?>" data-gauge="a" data-f="<?php echo html_escape($g['f']); ?>"></svg>
+        <div class="flex items-center gap-4 sm:gap-2 md:gap-3 xl:gap-4">
+          <svg class="gauge size-28 shrink-0 sm:size-20 xl:size-28" viewBox="0 0 120 70" role="img" aria-label="<?php echo html_escape($g['aria']); ?>" data-gauge="a" data-f="<?php echo html_escape($g['f']); ?>"></svg>
           <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-xs font-medium uppercase tracking-wider text-ems-muted"><?php echo html_escape($g['label']); ?></span>
+            <span class="text-xs font-medium uppercase leading-tight tracking-wider text-ems-muted"><?php echo html_escape($g['label']); ?></span>
             <span class="truncate text-xl font-semibold tabular-nums"><span data-f="<?php echo html_escape($g['f']); ?>" data-dec="1">-</span> <span class="text-xs font-normal text-ems-muted">A</span></span>
             <span class="flex items-center gap-2">
               <svg class="size-2 shrink-0" viewBox="0 0 8 8" aria-hidden="true"><circle id="dot-<?php echo html_escape($g['f']); ?>" cx="4" cy="4" r="4" fill="#9AA1AD"/></svg>
@@ -370,7 +363,7 @@ $tarif_num = function ($v, $dec) {
     </p>
   </div>
 
-  <!-- L-T fase 1: kartu Tren 24 Jam (dummy, statis) -->
+  <!-- L-T fase 2: kartu Tren 24 Jam (DB ems.data_electricity_iot5, dinamis, hover interaktif — SS5-T4) -->
   <div class="rounded-lg border border-ems-line bg-white">
     <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
       <div class="flex min-w-0 items-center gap-3">
@@ -383,13 +376,13 @@ $tarif_num = function ($v, $dec) {
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
-        <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($trends['tgl']) ?></span>
-        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+        <span data-date="lt" class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($trends['tgl']) ?></span>
+        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Sumber DB</span>
       </div>
     </div>
 
-    <?php $ci = 0; foreach ($trend_defs as $tkey => $def):
-      $t_c    = $trends['charts'][$tkey];
+    <?php $ci = 0; foreach ($trends['charts'] as $tkey => $t_c):
+      $sc     = $t_c['scale'];
       $plot_h = 'h-40 sm:h-52 lg:h-60';
       $ci++;
       $is_last  = ($ci === 3);
@@ -397,9 +390,12 @@ $tarif_num = function ($v, $dec) {
       $pad      = $is_first ? 'pt-3 pb-4' : ($is_last ? 'pt-4 pb-3' : 'pt-4 pb-4');
     ?>
     <div class="<?php echo $is_last ? '' : 'border-b border-ems-line/70 '; ?><?php echo $pad; ?> px-4 md:px-6">
-      <h3 class="flex min-w-0 items-baseline gap-2">
+      <h3 class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1" data-trendhead="<?= html_escape($tkey) ?>">
         <span class="truncate text-sm font-semibold"><?= html_escape($t_c['title']) ?></span>
         <span class="shrink-0 text-xs font-normal text-ems-muted"><?= html_escape($t_c['unit']) ?></span>
+        <?php if (!empty($sc['expanded'])): ?>
+        <span data-scaleinfo class="ml-auto shrink-0 text-[11px] tabular-nums text-ems-muted">Skala <?= (int) $sc['ymin'] ?>–<?= (int) $sc['ymax'] ?> <?= ($tkey === 'a') ? 'A' : 'V' ?> · <span class="text-ems-amberdeep">batas <?= (int) $sc['limit'] ?></span></span>
+        <?php endif; ?>
       </h3>
 
       <div class="mt-2 grid grid-cols-4 gap-x-3 text-xs" role="table" aria-label="Ringkasan <?= html_escape($t_c['title']) ?>">
@@ -412,9 +408,9 @@ $tarif_num = function ($v, $dec) {
         <?php endforeach; ?>
         <?php foreach (array('max' => 'Maks', 'avg' => 'Rata', 'min' => 'Min') as $fld => $lbl): ?>
         <div class="truncate text-ems-muted"><?= $lbl ?></div>
-        <?php foreach (array('R', 'S', 'T') as $sk): $st = $t_c['series'][$sk]; ?>
+        <?php foreach (array('R', 'S', 'T') as $sk): $st = $t_c['series'][$sk]['stat']; $dec = ($tkey === 'a') ? 0 : 1; ?>
         <div class="flex min-w-0 flex-wrap items-baseline gap-x-1 tabular-nums">
-          <span class="font-medium"><?= $trend_num($st[$fld], ($tkey === 'a') ? 0 : 1) ?> <?= ($tkey === 'a') ? 'A' : 'V' ?></span>
+          <span data-cell="<?= html_escape($tkey . ':' . $sk . ':' . $fld) ?>"><?= $trend_val($st[$fld], $dec, $sc) ?> <?= ($tkey === 'a') ? 'A' : 'V' ?></span>
           <?php if ($fld !== 'avg'): ?>
           <span class="text-[10px] text-ems-muted"><?= html_escape($st['r' . $fld]) ?></span>
           <?php endif; ?>
@@ -424,31 +420,45 @@ $tarif_num = function ($v, $dec) {
       </div>
 
       <div class="mt-3 flex">
-        <div class="relative w-12 shrink-0 <?= $plot_h ?>">
-          <?php for ($yv = $def['ymin']; $yv <= $def['ymax'] + 0.001; $yv += $def['ystep']):
-            $frac = ($def['ymax'] - $yv) / ($def['ymax'] - $def['ymin']); ?>
+        <div data-yaxis="<?= html_escape($tkey) ?>" class="relative w-12 shrink-0 <?= $plot_h ?>">
+          <?php for ($yv = $sc['ymin']; $yv <= $sc['ymax'] + 0.001; $yv += $sc['ystep']):
+            $frac = ($sc['ymax'] - $yv) / ($sc['ymax'] - $sc['ymin']); ?>
           <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= (int) $yv ?></span>
           <?php endfor; ?>
         </div>
-        <div class="relative min-w-0 flex-1 <?= $plot_h ?>">
-          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" role="img" aria-label="<?= html_escape($t_c['title']) ?> hari ini, WIB, data dummy">
+        <div class="relative min-w-0 flex-1 cursor-crosshair rounded-md <?= $plot_h ?> outline-offset-2 focus-visible:outline-2 focus-visible:outline-ems-amber" tabindex="0" role="img" data-trend="<?= html_escape($tkey) ?>" aria-label="<?= html_escape($t_c['title']) ?> hari ini WIB, dari pencatatan DB 00:00–24:00">
+          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
             <rect x="600" y="0" width="133.33" height="300" fill="rgba(234,165,0,0.10)" />
-            <?php for ($yv = $def['ymin']; $yv <= $def['ymax'] + 0.001; $yv += $def['ystep']):
-              $gy = 300 - 300 * (($yv - $def['ymin']) / ($def['ymax'] - $def['ymin'])); ?>
+            <g data-deco>
+            <?php for ($yv = $sc['ymin']; $yv <= $sc['ymax'] + 0.001; $yv += $sc['ystep']):
+              $gy = 300 - 300 * (($yv - $sc['ymin']) / ($sc['ymax'] - $sc['ymin'])); ?>
             <line x1="0" y1="<?= sprintf('%.2F', $gy) ?>" x2="800" y2="<?= sprintf('%.2F', $gy) ?>" stroke="#E3E5E0" stroke-width="1" vector-effect="non-scaling-stroke" />
             <?php endfor; ?>
-            <?php foreach ($def['refs'] as $ref):
-              $ry = 300 - 300 * (($ref['v'] - $def['ymin']) / ($def['ymax'] - $def['ymin'])); ?>
+            <?php foreach ($sc['refs'] as $ref):
+              $ry = 300 - 300 * (($ref['v'] - $sc['ymin']) / ($sc['ymax'] - $sc['ymin'])); ?>
             <line x1="0" y1="<?= sprintf('%.2F', $ry) ?>" x2="800" y2="<?= sprintf('%.2F', $ry) ?>" stroke="<?= $ref['c'] ?>" stroke-width="1.5" stroke-dasharray="6 3" vector-effect="non-scaling-stroke" />
             <?php endforeach; ?>
+            <?php if (!empty($sc['expanded']) && $sc['limit'] > $sc['ymin'] && $sc['limit'] < $sc['ymax']):
+              $ly = 300 - 300 * (($sc['limit'] - $sc['ymin']) / ($sc['ymax'] - $sc['ymin'])); ?>
+            <line x1="0" y1="<?= sprintf('%.2F', $ly) ?>" x2="800" y2="<?= sprintf('%.2F', $ly) ?>" stroke="#B97A0C" stroke-width="1.5" stroke-dasharray="2 4" vector-effect="non-scaling-stroke" />
+            <?php endif; ?>
+            </g>
             <?php foreach (array('R', 'S', 'T') as $sk): $stl = $trend_style[$sk]; ?>
-            <polyline fill="none" stroke="<?= $stl['var'] ?>" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"<?= ($stl['dash'] !== '') ? ' stroke-dasharray="' . $stl['dash'] . '"' : '' ?> vector-effect="non-scaling-stroke" points="<?= $trend_points($t_c['series'][$sk]['vals'], $def['ymin'], $def['ymax']) ?>" />
+            <polyline data-series="<?= $sk ?>" fill="none" stroke="<?= $stl['var'] ?>" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"<?= ($stl['dash'] !== '') ? ' stroke-dasharray="' . $stl['dash'] . '"' : '' ?> vector-effect="non-scaling-stroke" points="<?= $day_line($t_c['series'][$sk]['pts'], $sc['ymin'], $sc['ymax']) ?>" />
             <?php endforeach; ?>
           </svg>
-          <?php foreach ($def['refs'] as $ref):
-            $frac = ($def['ymax'] - $ref['v']) / ($def['ymax'] - $def['ymin']); ?>
-          <span class="absolute right-2 -translate-y-1/2 rounded border border-ems-line bg-white/90 px-1.5 py-px text-[10px] font-medium text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= html_escape($ref['label']) ?></span>
+          <div data-refchips="<?= html_escape($tkey) ?>" class="pointer-events-none absolute inset-0">
+            <?php foreach ($sc['refs'] as $ref):
+              $frac = ($sc['ymax'] - $ref['v']) / ($sc['ymax'] - $sc['ymin']); ?>
+            <span class="absolute right-2 -translate-y-1/2 rounded border border-ems-line bg-white/90 px-1.5 py-px text-[10px] font-medium text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= html_escape($ref['label']) ?></span>
+            <?php endforeach; ?>
+          </div>
+          <!-- crosshair + dot + tooltip (JS lvmdp-trend.js; posisi % diperbarui) -->
+          <div data-hx class="pointer-events-none absolute inset-y-0 hidden w-px bg-ems-steel-400/60"></div>
+          <?php foreach (array('R' => 'var(--ems-fasa-r)', 'S' => 'var(--ems-fasa-s)', 'T' => 'var(--ems-ink)') as $sk => $cv): ?>
+          <div data-dot="<?= $sk ?>" class="pointer-events-none absolute hidden size-2 -translate-x-1/2 -translate-y-1/2 rounded-full" style="background:<?= $cv ?>"></div>
           <?php endforeach; ?>
+          <div data-tip class="pointer-events-none absolute hidden z-10 min-w-max rounded-md border border-ems-line bg-white px-2.5 py-2 text-[11px] leading-4 tabular-nums text-ems-ink"></div>
         </div>
       </div>
 
@@ -462,11 +472,11 @@ $tarif_num = function ($v, $dec) {
     <?php endforeach; ?>
 
     <p class="border-t border-ems-line px-4 py-3 text-[11px] text-ems-muted md:px-6">
-      Pita kuning = WBP 18:00–22:00 · Skala tetap (L-N 190–240 V · L-L 330–420 V · Arus 0–1200 A) · Data dummy — data realtime tetap dari MQTT.
+      Pita kuning = WBP 18:00–22:00 · Skala vertikal menyesuaikan data (batas dasar: L-N 240 V · L-L 420 V · Arus 1200 A) · ↑/↓ = di atas/di bawah batas dasar · — = tidak ada data · Titik = waktu baris tercatat · Statistik dari titik tercatat (Rata = mean, bukan weighted) · Data menit dari DB ems.data_electricity_iot5.
     </p>
   </div>
 
-  <!-- P-H fase 1: kartu "Power Hari Ini" (dummy display saja, tanpa JS) -->
+  <!-- P-H fase 2: kartu "Power Hari Ini" (DB ems.data_electricity_iot5, dinamis, hover interaktif — SS5-T4) -->
   <div class="rounded-lg border border-ems-line bg-white">
     <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
       <div class="flex min-w-0 items-center gap-3">
@@ -475,35 +485,40 @@ $tarif_num = function ($v, $dec) {
         </span>
         <div class="flex min-w-0 flex-col">
           <h2 class="truncate text-sm font-semibold">Power Hari Ini</h2>
-          <p class="truncate text-xs text-ems-muted">Daya rata-rata 5 menit — pola beban hari ini</p>
+          <p class="truncate text-xs text-ems-muted">Daya aktif per catatan — pola beban hari ini</p>
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
-        <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($power['tgl']) ?></span>
-        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+        <span data-date="ph" class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($power['tgl']) ?></span>
+        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Sumber DB</span>
       </div>
     </div>
 
     <div class="px-4 py-4 md:px-6">
-
+      <?php $psc = $power['scale']; ?>
       <div class="flex">
-        <div class="relative w-12 shrink-0 h-40 sm:h-52 lg:h-60">
-          <?php for ($yv = $power['ymin']; $yv <= $power['ymax'] + 0.001; $yv += $power['ystep']):
-            $frac = ($power['ymax'] - $yv) / ($power['ymax'] - $power['ymin']); ?>
+        <div data-yaxis="ph" class="relative w-12 shrink-0 h-40 sm:h-52 lg:h-60">
+          <?php for ($yv = $psc['ymin']; $yv <= $psc['ymax'] + 0.001; $yv += $psc['ystep']):
+            $frac = ($psc['ymax'] - $yv) / ($psc['ymax'] - $psc['ymin']); ?>
           <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= (int) $yv ?></span>
           <?php endfor; ?>
         </div>
-        <div class="relative min-w-0 flex-1 h-40 sm:h-52 lg:h-60">
-          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" role="img" aria-label="Daya aktif (kW) hari ini WIB, data dummy">
+        <div class="relative min-w-0 flex-1 cursor-crosshair rounded-md h-40 sm:h-52 lg:h-60 outline-offset-2 focus-visible:outline-2 focus-visible:outline-ems-amber" tabindex="0" role="img" data-trend="ph" aria-label="Daya aktif (kW) hari ini WIB, dari pencatatan DB 00:00–24:00">
+          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
             <rect x="600" y="0" width="133.33" height="300" fill="rgba(234,165,0,0.10)" />
-            <?php for ($yv = $power['ymin']; $yv <= $power['ymax'] + 0.001; $yv += $power['ystep']):
-              $gy = 300 - 300 * (($yv - $power['ymin']) / ($power['ymax'] - $power['ymin'])); ?>
+            <g data-deco>
+            <?php for ($yv = $psc['ymin']; $yv <= $psc['ymax'] + 0.001; $yv += $psc['ystep']):
+              $gy = 300 - 300 * (($yv - $psc['ymin']) / ($psc['ymax'] - $psc['ymin'])); ?>
             <line x1="0" y1="<?= sprintf('%.2F', $gy) ?>" x2="800" y2="<?= sprintf('%.2F', $gy) ?>" stroke="#E3E5E0" stroke-width="1" vector-effect="non-scaling-stroke" />
             <?php endfor; ?>
-            <polyline fill="none" stroke="#191C1F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="<?= $trend_points($power['vals'], $power['ymin'], $power['ymax']) ?>" />
-            <circle cx="<?= $power['peak']['cpx'] ?>" cy="<?= $power['peak']['cpy'] ?>" r="3" fill="#191C1F" />
+            </g>
+            <polyline data-series="K" fill="none" stroke="#191C1F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="<?= $day_line($power['pts'], $psc['ymin'], $psc['ymax']) ?>" />
+            <circle data-peakdot <?php if ($power['peak']['val'] !== NULL): ?>cx="<?= $power['peak']['cpx'] ?>" cy="<?= $power['peak']['cpy'] ?>" r="3" fill="#191C1F"<?php endif; ?> />
           </svg>
-          <span class="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded border border-ems-line bg-white/90 px-1.5 py-px text-[10px] font-medium tabular-nums text-ems-muted" style="top:<?= $power['peak']['cy'] ?>%;left:<?= $power['peak']['x'] ?>%">Maks <?= $trend_num($power['peak']['val'], 1) ?> kW <?= html_escape($power['peak']['t']) ?></span>
+          <span data-cell="ph:peak" class="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded border border-ems-line bg-white/90 px-1.5 py-px text-[10px] font-medium tabular-nums text-ems-muted" style="top:<?= $power['peak']['cy'] ?>%;left:<?= $power['peak']['x'] ?>%">Maks <?= $dash_num($power['peak']['val'], 1) ?> kW <?= html_escape($power['peak']['t']) ?></span>
+          <div data-hx class="pointer-events-none absolute inset-y-0 hidden w-px bg-ems-steel-400/60"></div>
+          <div data-dot="K" class="pointer-events-none absolute hidden size-2 -translate-x-1/2 -translate-y-1/2 rounded-full" style="background:var(--ems-ink)"></div>
+          <div data-tip class="pointer-events-none absolute hidden z-10 min-w-max rounded-md border border-ems-line bg-white px-2.5 py-2 text-[11px] leading-4 tabular-nums text-ems-ink"></div>
         </div>
       </div>
 
@@ -519,7 +534,7 @@ $tarif_num = function ($v, $dec) {
         <div class="min-w-0">
           <span class="block text-[10px] text-ems-muted"><?= $plbl ?></span>
           <span class="block truncate tabular-nums text-ems-ink">
-            <span class="font-semibold"><?= $trend_num($p_st[$fld], 1) ?></span>
+            <span data-cell="ph:<?= $fld ?>"><?= $dash_num($p_st[$fld], 1) ?></span>
             <span class="text-xs font-normal text-ems-muted">kW</span>
             <?php if ($fld !== 'avg'): ?>
             <span class="text-[10px] text-ems-muted"><?= html_escape($p_st['r' . $fld]) ?></span>
@@ -531,11 +546,13 @@ $tarif_num = function ($v, $dec) {
     </div>
 
     <p class="border-t border-ems-line px-4 py-3 text-[11px] text-ems-muted md:px-6">
-      Pita kuning = WBP 18:00–22:00 · Skala tetap 0–600 kW · Titik ink = puncak daya · Data dummy — data realtime tetap dari MQTT.
+      Pita kuning = WBP 18:00–22:00 · Skala tetap 0–600 kW · Titik ink = puncak daya · Titik = waktu baris tercatat · Data menit dari DB ems.data_electricity_iot5.
     </p>
   </div>
 
   <p class="truncate text-xs text-ems-muted">Jarum gauge mengikuti data MQTT live dengan animasi halus (display saja, tanpa database).</p>
 </div>
+<script type="application/json" id="trends-data"><?= $trends_json ?></script>
 <script src="<?php echo base_url('assets/js/mqtt.min.js'); ?>"></script>
 <script src="<?php echo base_url('assets/js/lvmdp-live.js'); ?>"></script>
+<script src="<?php echo base_url('assets/js/lvmdp-trend.js'); ?>"></script>

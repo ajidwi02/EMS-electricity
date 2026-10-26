@@ -1,6 +1,6 @@
 <?php
 /**
- * EMS MQTT Worker (M2) — recorder EMQX → ems.readings.
+ * EMS MQTT Worker (M2) — recorder EMQX → ems.data_electricity_iot5.
  * Spec: plans/ems-m2-mqtt-worker.md (landasan plans/ems-database-schema.md §5, Pendekatan A).
  * PHP 7.4+, tanpa dependensi eksternal. Mode: (default) listen, --probe N, --flush N, --help.
  */
@@ -218,7 +218,7 @@ final class MqttRecorder
     public $panels = array();
     private $buffer = array();
     private $metricsKeys = array('v_r', 'v_s', 'v_t', 'v_rs', 'v_st', 'v_rt', 'i_r', 'i_s', 'i_t', 'pf', 'kw', 'kwh', 'hz');
-    private $upsertSql = 'INSERT INTO `readings`'
+    private $upsertSql = 'INSERT INTO `data_electricity_iot5`'
         . ' (`panel_id`, `recorded_at`, `terminal_time`,'
         . '  `v_r`, `v_s`, `v_t`, `v_rs`, `v_st`, `v_rt`,'
         . '  `i_r`, `i_s`, `i_t`, `pf`, `kw`, `kwh`, `hz`)'
@@ -272,9 +272,9 @@ final class MqttRecorder
 
     public function loadPanels()
     {
-        $res = $this->db->query('SELECT id, code FROM panels WHERE is_active = 1');
+        $res = $this->db->query('SELECT id, code FROM electricity_panel_iot5 WHERE is_active = 1');
         if ($res === FALSE) {
-            throw new RuntimeException('SELECT panels gagal: ' . $this->db->error);
+            throw new RuntimeException('SELECT electricity_panel_iot5 gagal: ' . $this->db->error);
         }
         $this->panels = array();
         while ($row = $res->fetch_assoc()) {
@@ -455,7 +455,7 @@ try {
     $rec->connectDb();
     $nPanels = $rec->loadPanels();
     if ($nPanels === 0) {
-        throw new RuntimeException('tidak ada panel aktif di tabel panels');
+        throw new RuntimeException('tidak ada panel aktif di tabel electricity_panel_iot5');
     }
     ems_say('panel aktif: ' . implode(', ', array_keys($rec->panels)));
 
@@ -508,11 +508,11 @@ try {
         if ($mode === 'flush') {
             list($r, $u, $d) = $rec->flush($EMS_TZ, new DateTime('now', $EMS_TZ));
             ems_say('flush-final: rows=' . $r . ' unknown=' . $u . ($d !== NULL ? ' drift=' . $d . 's' : ''));
-            $lastRow = $rec->db->query('SELECT COUNT(*) AS total FROM readings');
+            $lastRow = $rec->db->query('SELECT COUNT(*) AS total FROM data_electricity_iot5');
             $tot = $lastRow->fetch_assoc();
-            ems_say('readings.total = ' . (int) $tot['total']);
+            ems_say('data_electricity_iot5.total = ' . (int) $tot['total']);
             $lastRow->free();
-            $show = $rec->db->query('SELECT id, panel_id, recorded_at, terminal_time, v_r, v_s, v_t, pf, kw, kwh, hz FROM readings ORDER BY id DESC LIMIT 1');
+            $show = $rec->db->query('SELECT id, panel_id, recorded_at, terminal_time, v_r, v_s, v_t, pf, kw, kwh, hz FROM data_electricity_iot5 ORDER BY id DESC LIMIT 1');
             if ($show instanceof mysqli_result) {
                 $row = $show->fetch_assoc();
                 if ($row) {

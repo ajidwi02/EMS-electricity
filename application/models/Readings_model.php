@@ -2,7 +2,7 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
- * Readings_model — data layer time-series EMS (tabel `readings` + `panels`).
+ * Readings_model — data layer time-series EMS (tabel `data_electricity_iot5` + `electricity_panel_iot5`).
  * Spesifikasi: plans/ems-database-schema.md §3, §5.3, §8 (SSOT CP-009/CP-010).
  */
 class Readings_model extends CI_Model {
@@ -30,7 +30,7 @@ class Readings_model extends CI_Model {
       ->select('id, code, name, mqtt_topic, sort_order')
       ->where('is_active', 1)
       ->order_by('sort_order', 'ASC')
-      ->get('panels')
+      ->get('electricity_panel_iot5')
       ->result_array();
   }
 
@@ -47,7 +47,7 @@ class Readings_model extends CI_Model {
     if (array_key_exists($code, $this->panel_cache)) {
       return $this->panel_cache[$code];
     }
-    $row = $this->db->select('id')->where('code', $code)->get('panels')->row_array();
+    $row = $this->db->select('id')->where('code', $code)->get('electricity_panel_iot5')->row_array();
     if ($row === NULL) {
       return NULL;
     }
@@ -63,7 +63,7 @@ class Readings_model extends CI_Model {
   public function upsert_reading($panel_id, $recorded_at, $terminal_time, $metrics)
   {
     $m = $this->sanitize_metrics($metrics);
-    $sql = "INSERT INTO `readings`"
+    $sql = "INSERT INTO `data_electricity_iot5`"
       . " (`panel_id`, `recorded_at`, `terminal_time`,"
       . "  `v_r`, `v_s`, `v_t`, `v_rs`, `v_st`, `v_rt`,"
       . "  `i_r`, `i_s`, `i_t`, `pf`, `kw`, `kwh`)"
@@ -100,8 +100,8 @@ class Readings_model extends CI_Model {
   public function latest_reading($panel_id)
   {
     $sql = "SELECT r.*, p.name AS panel_name"
-      . " FROM `readings` r"
-      . " JOIN `panels` p ON p.`id` = r.`panel_id`"
+      . " FROM `data_electricity_iot5` r"
+      . " JOIN `electricity_panel_iot5` p ON p.`id` = r.`panel_id`"
       . " WHERE r.`panel_id` = ?"
       . " ORDER BY r.`recorded_at` DESC"
       . " LIMIT 1";
@@ -115,7 +115,7 @@ class Readings_model extends CI_Model {
   public function range_24h($panel_id)
   {
     $sql = "SELECT `recorded_at`, `v_r`, `v_s`, `v_t`, `kw`, `kwh`"
-      . " FROM `readings`"
+      . " FROM `data_electricity_iot5`"
       . " WHERE `panel_id` = ?"
       . "   AND `recorded_at` >= DATE_SUB(NOW(), INTERVAL 24 HOUR)"
       . " ORDER BY `recorded_at` ASC";
@@ -134,11 +134,33 @@ class Readings_model extends CI_Model {
       . " ROUND(AVG(`v_t`), 1) AS avg_v_t,"
       . " ROUND(AVG(`kw`), 1)  AS avg_kw,"
       . " MAX(`kwh`) AS last_kwh"
-      . " FROM `readings`"
+      . " FROM `data_electricity_iot5`"
       . " WHERE `panel_id` = ?"
       . "   AND `recorded_at` >= CURDATE()"
       . " GROUP BY hour_bucket"
       . " ORDER BY hour_bucket";
+    return $this->db->query($sql, array((int) $panel_id))->result_array();
+  }
+
+  /**
+   * Deret per-baris hari ini untuk 1 panel (L-T/P-H fase 2, spec
+   * plans/ems-lvmdp-db-trend.md §SS5-T2). Tanpa GROUP: uq_panel_recorded
+   * menjamin 1 baris per (panel, menit); ORDER ASC (recorded_at, id)
+   * deterministik; LIMIT 1441 guard (1 hari 1440 menit + margin).
+   * ROWS: recorded_at + 10 kolom chart (hrs sesuai D6), NULL diperbolehkan
+   * (baris publisher parsial) — dipilah di controller, bukan di sini.
+   */
+  public function day_series($panel_id)
+  {
+    $sql = "SELECT"
+      . " `recorded_at`,"
+      . " `v_r`, `v_s`, `v_t`, `v_rs`, `v_st`, `v_rt`,"
+      . " `i_r`, `i_s`, `i_t`, `kw`"
+      . " FROM `data_electricity_iot5`"
+      . " WHERE `panel_id` = ?"
+      . "   AND `recorded_at` >= CURDATE()"
+      . " ORDER BY `recorded_at` ASC, `id` ASC"
+      . " LIMIT 1441";
     return $this->db->query($sql, array((int) $panel_id))->result_array();
   }
 
@@ -156,7 +178,7 @@ class Readings_model extends CI_Model {
       . " MAX(`kwh`) AS kwh_max,"
       . " MAX(`recorded_at`) AS last_at,"
       . " COUNT(*) AS n"
-      . " FROM `readings`"
+      . " FROM `data_electricity_iot5`"
       . " WHERE `panel_id` = ?"
       . "   AND `recorded_at` >= CURDATE()";
     $row = $this->db->query($sql, array((int) $panel_id))->row_array();
@@ -169,8 +191,8 @@ class Readings_model extends CI_Model {
   public function snapshot_panels($recorded_at)
   {
     $sql = "SELECT p.`code`, p.`name`, r.`kw`, r.`pf`, r.`kwh`"
-      . " FROM `panels` p"
-      . " LEFT JOIN `readings` r"
+      . " FROM `electricity_panel_iot5` p"
+      . " LEFT JOIN `data_electricity_iot5` r"
       . "        ON r.`panel_id` = p.`id`"
       . "       AND r.`recorded_at` = ?"
       . " WHERE p.`is_active` = 1"
@@ -186,8 +208,8 @@ class Readings_model extends CI_Model {
     $days = max(1, (int) $days);
     $sql = "SELECT p.`code`, DATE(r.`recorded_at`) AS tanggal,"
       . " MAX(r.`kwh`) - MIN(r.`kwh`) AS konsumsi_kwh"
-      . " FROM `readings` r"
-      . " JOIN `panels` p ON p.`id` = r.`panel_id`"
+      . " FROM `data_electricity_iot5` r"
+      . " JOIN `electricity_panel_iot5` p ON p.`id` = r.`panel_id`"
       . " WHERE r.`recorded_at` >= DATE_SUB(CURDATE(), INTERVAL ? DAY)"
       . " GROUP BY p.`code`, DATE(r.`recorded_at`)"
       . " ORDER BY tanggal DESC, p.`sort_order`";
@@ -203,7 +225,7 @@ class Readings_model extends CI_Model {
   public function count_range($from, $to)
   {
     $sql = "SELECT COUNT(*) AS n"
-      . " FROM `readings`"
+      . " FROM `data_electricity_iot5`"
       . " WHERE `recorded_at` >= ?"
       . "   AND `recorded_at` <= ?";
     $row = $this->db->query($sql, array(
@@ -229,8 +251,8 @@ class Readings_model extends CI_Model {
       . " `p`.`name` AS `panel`,"
       . " `r`.`v_r`, `r`.`v_s`, `r`.`v_t`, `r`.`v_rs`, `r`.`v_st`, `r`.`v_rt`,"
       . " `r`.`i_r`, `r`.`i_s`, `r`.`i_t`, `r`.`pf`, `r`.`kw`, `r`.`kwh`"
-      . " FROM `readings` `r`"
-      . " JOIN `panels` `p` ON `p`.`id` = `r`.`panel_id`"
+      . " FROM `data_electricity_iot5` `r`"
+      . " JOIN `electricity_panel_iot5` `p` ON `p`.`id` = `r`.`panel_id`"
       . " WHERE `r`.`recorded_at` >= ?"
       . "   AND `r`.`recorded_at` <= ?"
       . " ORDER BY `r`.`recorded_at` ASC, `r`.`id` ASC"
