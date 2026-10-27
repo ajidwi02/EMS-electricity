@@ -140,8 +140,8 @@ class Ems extends CI_Controller {
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
       'day_payload' => $this->lvmdp_day_payload(),
-      'tarif'       => $this->tarif_kemarin_dummy(),
-      'tarif7'      => $this->tarif7_harian_dummy(),
+      'tarif'       => $this->tarif_kemarin_db(),
+      'tarif7'      => $this->tarif7_harian_db(),
     );
     $extra['trends'] = $extra['day_payload'];
     $extra['power']  = $extra['day_payload']['power'];
@@ -368,6 +368,7 @@ class Ems extends CI_Controller {
       'biaya_total' => $b_l + $b_w,
       'rate_l'      => $rate_l,
       'k'           => $k_wbp,
+      'src'         => 'dummy',   // CP-051: penanda sumber utk badge view
     );
   }
 
@@ -445,6 +446,230 @@ class Ems extends CI_Controller {
       'stat'  => array('max' => $max, 'rmax' => $days[$imax]['lbl'],
                        'avg' => $sum / 7, 'min' => $min, 'rmin' => $days[$imin]['lbl']),
       'sum'   => $sum,
+      'src'   => 'dummy',   // CP-051: penanda sumber utk badge view
+    );
+  }
+
+  /**
+   * Hitung biaya energi per blok TOU — rumus Permen ESDM 7/2024 §3.2B
+   * (plans/perhitungan-tarif-listrik-wbp-lwbp.md).
+   *
+   * ATURAN: Biaya_LWBP = round(L1×tarif) + round(L2×tarif), BUKAN round((L1+L2)×tarif).
+   * Tarif_WBP = faktor_k × tarif_LWBP.
+   *
+   * @param array $kwh_blocks  Dari kwh_by_tou_block(): keys 'lwbp1','lwbp2','wbp' (float kWh)
+   * @param array $config      Dari get_tariff_config(): keys 'tarif_lwbp','faktor_k'
+   * @return array  'biaya_lwbp1','biaya_lwbp2','biaya_lwbp','biaya_wbp','biaya_total',
+   *                'tarif_lwbp','tarif_wbp','faktor_k'
+   */
+  private function tarif_calculator($kwh_blocks, $config)
+  {
+    $tarif_lwbp = (float) $config['tarif_lwbp'];
+    $faktor_k   = (float) $config['faktor_k'];
+    $tarif_wbp  = $faktor_k * $tarif_lwbp;
+
+    $biaya_lwbp1 = (int) round($kwh_blocks['lwbp1'] * $tarif_lwbp);
+    $biaya_lwbp2 = (int) round($kwh_blocks['lwbp2'] * $tarif_lwbp);
+    $biaya_lwbp  = $biaya_lwbp1 + $biaya_lwbp2;  // jumlah pembulatan (docs §6.2)
+    $biaya_wbp   = (int) round($kwh_blocks['wbp'] * $tarif_wbp);
+    $biaya_total = $biaya_lwbp + $biaya_wbp;
+
+    return array(
+      'biaya_lwbp1' => $biaya_lwbp1,
+      'biaya_lwbp2' => $biaya_lwbp2,
+      'biaya_lwbp'  => $biaya_lwbp,
+      'biaya_wbp'   => $biaya_wbp,
+      'biaya_total' => $biaya_total,
+      'tarif_lwbp'  => $tarif_lwbp,
+      'tarif_wbp'   => $tarif_wbp,
+      'faktor_k'    => $faktor_k,
+    );
+  }
+
+  /**
+   * K-T fase 2: "Konsumsi & Tarif Hari Kemarin" — DATA NYATA dari DB.
+   * Kontrak output SAMA PERSIS dengan tarif_kemarin_dummy() sehingga view BEKU.
+   * Jika tidak ada data/config → fallback ke data dummy (safety).
+   */
+  private function tarif_kemarin_db()
+  {
+    $this->load->model('Readings_model');
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+
+    // 1) Config tarif
+    $config = $this->Readings_model->get_tariff_config();
+    if ($config === NULL) {
+      return $this->tarif_kemarin_dummy();
+    }
+
+    // 2) Parse jam blok TOU dari config
+    $tou_hours = array(
+      'wbp'   => array((int) substr($config['wbp_start'], 0, 2),   (int) substr($config['wbp_end'], 0, 2)),
+      'lwbp1' => array((int) substr($config['lwbp1_start'], 0, 2), (int) substr($config['lwbp1_end'], 0, 2)),
+      'lwbp2' => array((int) substr($config['lwbp2_start'], 0, 2), (int) substr($config['lwbp2_end'], 0, 2)),
+    );
+
+    // 3) Tanggal kemarin (WIB)
+    $yesterday = new DateTime('yesterday', $tz);
+    $date_str  = $yesterday->format('Y-m-d');
+    $tgl_lbl   = 'Kemarin — ' . $yesterday->format('j') . ' '
+               . $bulan[(int) $yesterday->format('n')] . ' '
+               . $yesterday->format('Y') . ' (WIB)';
+
+    // 4) Panel LVMDP
+    $pid = $this->Readings_model->panel_id_by_code('lvmdp');
+    if ($pid === NULL) {
+      return $this->tarif_kemarin_dummy();
+    }
+
+    // 5) Hitung kWh per blok
+    $kwh = $this->Readings_model->kwh_by_tou_block($pid, $date_str, $tou_hours);
+    if (!$kwh['has_data']) {
+      return $this->tarif_kemarin_dummy();
+    }
+
+    // 6) Hitung biaya
+    $biaya = $this->tarif_calculator($kwh, $config);
+
+    // 7) Build payload — kontrak PERSIS sama dengan tarif_kemarin_dummy()
+    $rate_l = (float) $config['tarif_lwbp'];
+    $k_wbp  = (float) $config['faktor_k'];
+
+    return array(
+      'tgl'         => $tgl_lbl,
+      'rows'        => array(
+        array('t' => 'item',     'label' => 'LWBP 1',
+              'win' => sprintf('%02d:00–%02d:00', $tou_hours['lwbp1'][0], $tou_hours['lwbp1'][1]),
+              'kwh' => round($kwh['lwbp1'], 2), 'biaya' => $biaya['biaya_lwbp1']),
+        array('t' => 'item',     'label' => 'LWBP 2',
+              'win' => sprintf('%02d:00–%02d:00', $tou_hours['lwbp2'][0], $tou_hours['lwbp2'][1]),
+              'kwh' => round($kwh['lwbp2'], 2), 'biaya' => $biaya['biaya_lwbp2']),
+        array('t' => 'subtotal', 'label' => 'LWBP',
+              'win' => 'LWBP 1 + LWBP 2',
+              'kwh' => round($kwh['lwbp'], 2),  'biaya' => $biaya['biaya_lwbp']),
+        array('t' => 'item',     'label' => 'WBP',
+              'win' => sprintf('%02d:00–%02d:00', $tou_hours['wbp'][0], $tou_hours['wbp'][1]),
+              'kwh' => round($kwh['wbp'], 2),   'biaya' => $biaya['biaya_wbp']),
+      ),
+      'kwh_total'   => round($kwh['total'], 2),
+      'biaya_total' => $biaya['biaya_total'],
+      'rate_l'      => $rate_l,
+      'k'           => $k_wbp,
+      'src'         => 'db',     // CP-051: penanda sumber utk badge view
+    );
+  }
+
+  /**
+   * T-T-H fase 2: "Total Tarif Harian" — DATA NYATA 7 hari dari DB.
+   * Kontrak output SAMA PERSIS dengan tarif7_harian_dummy() sehingga view BEKU.
+   * Jika tidak ada data/config → fallback ke data dummy (safety).
+   */
+  private function tarif7_harian_db()
+  {
+    $this->load->model('Readings_model');
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+
+    // 1) Config tarif
+    $config = $this->Readings_model->get_tariff_config();
+    if ($config === NULL) {
+      return $this->tarif7_harian_dummy();
+    }
+
+    // 2) Parse jam blok TOU
+    $tou_hours = array(
+      'wbp'   => array((int) substr($config['wbp_start'], 0, 2),   (int) substr($config['wbp_end'], 0, 2)),
+      'lwbp1' => array((int) substr($config['lwbp1_start'], 0, 2), (int) substr($config['lwbp1_end'], 0, 2)),
+      'lwbp2' => array((int) substr($config['lwbp2_start'], 0, 2), (int) substr($config['lwbp2_end'], 0, 2)),
+    );
+
+    // 3) Panel LVMDP
+    $pid = $this->Readings_model->panel_id_by_code('lvmdp');
+    if ($pid === NULL) {
+      return $this->tarif7_harian_dummy();
+    }
+
+    // 4) Data 7 hari per blok
+    $daily = $this->Readings_model->kwh_daily_by_tou($pid, 7, $tou_hours);
+
+    // 5) Cek apakah ada data sama sekali
+    $any_data = FALSE;
+    foreach ($daily as $d) {
+      if ($d['has_data']) { $any_data = TRUE; break; }
+    }
+    if (!$any_data) {
+      return $this->tarif7_harian_dummy();
+    }
+
+    // 6) Build payload: hitung biaya per hari
+    $days = array();
+    $sum  = 0;
+    foreach ($daily as $d) {
+      $biaya   = $this->tarif_calculator($d, $config);
+      $lwbp_rp = $biaya['biaya_lwbp'];
+      $wbp_rp  = $biaya['biaya_wbp'];
+      $total   = $lwbp_rp + $wbp_rp;
+      $days[]  = array(
+        'lbl'   => $d['label'],
+        'lwbp'  => $lwbp_rp,
+        'wbp'   => $wbp_rp,
+        'total' => $total,
+      );
+      $sum += $total;
+    }
+
+    // 7) Statistik
+    $max  = $days[0]['total'];
+    $min  = $days[0]['total'];
+    $imax = 0;
+    $imin = 0;
+    foreach ($days as $k => $row) {
+      if ($row['total'] > $max) { $max = $row['total']; $imax = $k; }
+      if ($row['total'] < $min) { $min = $row['total']; $imin = $k; }
+    }
+
+    // 8) Label periode header — 3 cabang (pola existing tarif7_harian_dummy)
+    $lbl = function ($dt) use ($bulan) {
+      return $dt->format('j') . ' ' . $bulan[(int) $dt->format('n')];
+    };
+    $f   = new DateTime('-6 days', $tz);
+    $l   = new DateTime('today', $tz);
+    $f_m = (int) $f->format('n');
+    $f_y = (int) $f->format('Y');
+    $l_m = (int) $l->format('n');
+    $l_y = (int) $l->format('Y');
+    if ($f_y !== $l_y) {
+      $tgl_lbl = $lbl($f) . ' ' . $f_y . ' – ' . $lbl($l) . ' ' . $l_y . ' (WIB)';
+    } elseif ($f_m !== $l_m) {
+      $tgl_lbl = $lbl($f) . ' – ' . $lbl($l) . ' ' . $l_y . ' (WIB)';
+    } else {
+      $tgl_lbl = $f->format('j') . '–' . $l->format('j') . ' ' . $bulan[$l_m]
+               . ' ' . $l_y . ' (WIB)';
+    }
+
+    // 9) Skala Y: baseline 10 juta LOCKED user; auto-expand jika data > 10 juta
+    $ymax_raw = ($max > 0) ? (float) $max : 10000000.0;
+    $ymax  = max(10000000.0, ceil($ymax_raw / 2000000.0) * 2000000.0);
+    $ystep = 2000000.0;
+    // Jika lebih dari 6 tick → naikkan step
+    while (($ymax - 0.0) / $ystep > 6.0) {
+      $ystep *= 2.0;
+    }
+
+    return array(
+      'tgl'   => $tgl_lbl,
+      'ymin'  => 0.0,
+      'ymax'  => $ymax,
+      'ystep' => $ystep,
+      'days'  => $days,
+      'stat'  => array('max' => $max, 'rmax' => $days[$imax]['lbl'],
+                        'avg' => (count($days) > 0) ? $sum / count($days) : 0,
+                        'min' => $min, 'rmin' => $days[$imin]['lbl']),
+      'sum'   => $sum,
+      'src'   => 'db',      // CP-051: penanda sumber utk badge view
     );
   }
 

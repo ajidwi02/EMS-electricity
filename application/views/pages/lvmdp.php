@@ -191,7 +191,9 @@ $tarif_num = function ($v, $dec) {
     </div>
   </div>
 
-  <!-- K-T fase 1: kartu "Konsumsi & Tarif Hari Kemarin" (dummy display saja, tanpa JS) -->
+  <!-- K-T: kartu "Konsumsi & Tarif Hari Kemarin" — data DB dinamis (Ems::tarif_kemarin_db, CP-050;
+       fallback dummy saat config/panel/data kosong; badge dinamis CP-051) -->
+  <?php $kt_db = (isset($tarif['src']) && $tarif['src'] === 'db'); ?>
   <div class="rounded-lg border border-ems-line bg-white">
     <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
       <div class="flex min-w-0 items-center gap-3">
@@ -205,7 +207,7 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
         <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($tarif['tgl']) ?></span>
-        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+        <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold <?= $kt_db ? 'bg-ems-ok/10 text-ems-ok' : 'bg-ems-ambersoft text-ems-amberdeep' ?>"><?= $kt_db ? 'Sumber DB' : 'Data dummy' ?></span>
       </div>
     </div>
 
@@ -231,7 +233,7 @@ $tarif_num = function ($v, $dec) {
         <colgroup>
           <col style="width:36%"><col style="width:26%"><col style="width:38%">
         </colgroup>
-        <caption class="sr-only">Rincian konsumsi kWh dan estimasi tarif per blok PLN untuk hari kemarin (WIB), data dummy</caption>
+        <caption class="sr-only">Rincian konsumsi kWh dan estimasi tarif per blok PLN untuk hari kemarin (WIB), <?= $kt_db ? 'sumber DB (data_electricity_iot5)' : 'data dummy' ?></caption>
         <thead>
           <tr class="border-b border-ems-line/70 text-[10px] font-medium uppercase tracking-wider text-ems-muted">
             <th scope="col" class="py-1.5 pr-2 text-left">Blok tarif</th>
@@ -272,13 +274,15 @@ $tarif_num = function ($v, $dec) {
       </table>
 
       <p class="mt-3 text-[11px] leading-4 text-ems-muted">
-        Tarif LWBP Rp <?= $tarif_num($tarif['rate_l'], 2) ?>/kWh · WBP = <?= html_escape($tarif['k']) ?>× (Rp <?= $tarif_num($tarif['rate_l'] * $tarif['k'], 2) ?>/kWh) · Permen ESDM 7/2024, gol. I-3/TM · Estimasi biaya energi harian — belum termasuk RM, kVArh, PPN, PPJ, materai.
+        Tarif LWBP Rp <?= $tarif_num($tarif['rate_l'], 2) ?>/kWh · WBP = <?= html_escape($tarif['k']) ?>× (Rp <?= $tarif_num($tarif['rate_l'] * $tarif['k'], 2) ?>/kWh) · Permen ESDM 7/2024, gol. I-3/TM · Estimasi biaya energi harian — belum termasuk RM, kVArh, PPN, PPJ, materai · <?= $kt_db ? 'Sumber: DB data_electricity_iot5 (WIB)' : 'Data dummy — fallback' ?>.
       </p>
     </div>
   </div>
 
-  <!-- T-T-H fase 1: kartu "Total Tarif Harian" (grouped bar chart dummy, tanpa JS) -->
-  <div class="rounded-lg border border-ems-line bg-white">
+  <!-- T-T-H: kartu "Total Tarif Harian" — grouped bar chart DB dinamis (Ems::tarif7_harian_db, CP-050;
+       fallback dummy saat config/panel/data kosong; badge dinamis CP-051) -->
+  <?php $t7_db = (isset($tarif7['src']) && $tarif7['src'] === 'db'); ?>
+  <div class="rounded-lg border border-ems-line bg-white" id="tarif7-card">
     <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
       <div class="flex min-w-0 items-center gap-3">
         <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#EFF0ED]">
@@ -291,7 +295,7 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
         <span class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($tarif7['tgl']) ?></span>
-        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Data dummy</span>
+        <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold <?= $t7_db ? 'bg-ems-ok/10 text-ems-ok' : 'bg-ems-ambersoft text-ems-amberdeep' ?>"><?= $t7_db ? 'Sumber DB' : 'Data dummy' ?></span>
       </div>
     </div>
 
@@ -315,8 +319,8 @@ $tarif_num = function ($v, $dec) {
           <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= ((int) $yv === 0) ? '0' : number_format($yv / 1000000.0, 0, '.', '') . ' jt' ?></span>
           <?php endfor; ?>
         </div>
-        <div class="relative min-w-0 flex-1 h-40 sm:h-52 lg:h-60">
-          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" role="img" aria-label="Tarif harian (Rp) 7 hari terakhir WIB, data dummy">
+        <div class="relative min-w-0 flex-1 cursor-crosshair h-40 sm:h-52 lg:h-60" id="tarif7-chart" tabindex="0" role="img" aria-label="Tarif harian (Rp) 7 hari terakhir WIB, <?= $t7_db ? 'sumber DB' : 'data dummy' ?>. Arahkan kursor untuk detail.">
+          <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
             <?php for ($yv = $tarif7['ymin']; $yv <= $tarif7['ymax'] + 0.001; $yv += $tarif7['ystep']):
               $gy = 300 - 300 * (($yv - $tarif7['ymin']) / ($tarif7['ymax'] - $tarif7['ymin'])); ?>
             <line x1="0" y1="<?= sprintf('%.2F', $gy) ?>" x2="800" y2="<?= sprintf('%.2F', $gy) ?>" stroke="#E3E5E0" stroke-width="1" vector-effect="non-scaling-stroke" />
@@ -326,11 +330,19 @@ $tarif_num = function ($v, $dec) {
               $x1 = $xl;
               $x2 = $xl + $b_w + $b_g;
               $x3 = $xl + 2 * ($b_w + $b_g); ?>
-            <rect x="<?= sprintf('%.2F', $x1) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['lwbp'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['lwbp'] / $tarif7['ymax']) ?>" fill="var(--ems-steel-400)" />
-            <rect x="<?= sprintf('%.2F', $x2) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['wbp'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['wbp'] / $tarif7['ymax']) ?>" fill="var(--ems-amber)" />
-            <rect x="<?= sprintf('%.2F', $x3) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['total'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['total'] / $tarif7['ymax']) ?>" fill="var(--ems-ink)" />
+            <rect data-bar="lwbp" data-day="<?= $i ?>" x="<?= sprintf('%.2F', $x1) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['lwbp'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['lwbp'] / $tarif7['ymax']) ?>" fill="var(--ems-steel-400)" class="tarif7-bar" />
+            <rect data-bar="wbp" data-day="<?= $i ?>" x="<?= sprintf('%.2F', $x2) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['wbp'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['wbp'] / $tarif7['ymax']) ?>" fill="var(--ems-amber)" class="tarif7-bar" />
+            <rect data-bar="total" data-day="<?= $i ?>" x="<?= sprintf('%.2F', $x3) ?>" y="<?= sprintf('%.2F', 300 - 300 * $d['total'] / $tarif7['ymax']) ?>" width="<?= sprintf('%.2F', $b_w) ?>" height="<?= sprintf('%.2F', 300 * $d['total'] / $tarif7['ymax']) ?>" fill="var(--ems-ink)" class="tarif7-bar" />
+            <?php endforeach; ?>
+            <?php /* Invisible hover zones per day — full slot width × full height */ ?>
+            <?php foreach ($tarif7['days'] as $i => $d): ?>
+            <rect data-zone="<?= $i ?>" x="<?= sprintf('%.2F', $i * $slot) ?>" y="0" width="<?= sprintf('%.2F', $slot) ?>" height="300" fill="transparent" class="tarif7-zone" />
             <?php endforeach; ?>
           </svg>
+          <!-- crosshair vertical line -->
+          <div id="tarif7-hx" class="pointer-events-none absolute inset-y-0 hidden w-px bg-ems-steel-400/60" style="transition:left .12s cubic-bezier(.22,1,.36,1)"></div>
+          <!-- tooltip -->
+          <div id="tarif7-tip" class="pointer-events-none absolute z-10 hidden min-w-max rounded-md border border-ems-line bg-white px-3 py-2.5 text-[11px] leading-5 tabular-nums text-ems-ink" style="box-shadow:0 4px 16px rgba(0,0,0,.10);transition:opacity .18s ease,transform .18s cubic-bezier(.22,1,.36,1)"></div>
         </div>
       </div>
 
@@ -338,7 +350,7 @@ $tarif_num = function ($v, $dec) {
         <div class="w-12 shrink-0"></div>
         <div class="relative min-w-0 flex-1 h-4">
           <?php foreach ($tarif7['days'] as $i => $d): ?>
-          <span class="absolute top-0 -translate-x-1/2 text-[10px] tabular-nums text-ems-muted" style="left:<?= sprintf('%.2F%%', ($i + 0.5) * 100 / $n7) ?>"><?= html_escape($d['lbl']) ?></span>
+          <span data-xlabel="<?= $i ?>" class="tarif7-xlabel absolute top-0 -translate-x-1/2 text-[10px] tabular-nums text-ems-muted" style="left:<?= sprintf('%.2F%%', ($i + 0.5) * 100 / $n7) ?>"><?= html_escape($d['lbl']) ?></span>
           <?php endforeach; ?>
         </div>
       </div>
@@ -359,8 +371,14 @@ $tarif_num = function ($v, $dec) {
     </div>
 
     <p class="border-t border-ems-line px-4 py-3 text-[11px] text-ems-muted md:px-6">
-      Bar Total = bar LWBP + bar WBP · Skala tetap Rp 0–10 juta · Total 7 hari Rp <?= $tarif_num($tarif7['sum'], 0) ?> · Estimasi biaya energi — belum termasuk RM, kVArh, PPN, PPJ, materai · Data dummy — data harian nyata menunggu fase 2.
+      Bar Total = bar LWBP + bar WBP · Skala Rp 0–<?= number_format($tarif7['ymax'] / 1000000.0, 0, '.', '') ?> jt · Total 7 hari Rp <?= $tarif_num($tarif7['sum'], 0) ?> · Estimasi biaya energi — belum termasuk RM, kVArh, PPN, PPJ, materai · <?= $t7_db ? 'Sumber: DB data_electricity_iot5 (WIB)' : 'Data dummy — fallback' ?>.
     </p>
+    <!-- T-T-H: data JSON untuk hover interaktif -->
+    <script type="application/json" id="tarif7-data"><?= json_encode(array(
+      'days' => array_values($tarif7['days']),
+      'ymax' => $tarif7['ymax'],
+      'n'    => count($tarif7['days']),
+    ), JSON_UNESCAPED_UNICODE) ?></script>
   </div>
 
   <!-- L-T fase 2: kartu Tren 24 Jam (DB ems.data_electricity_iot5, dinamis, hover interaktif — SS5-T4) -->
@@ -377,7 +395,7 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
         <span data-date="lt" class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($trends['tgl']) ?></span>
-        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Sumber DB</span>
+        <span class="shrink-0 rounded-full bg-ems-ok/10 px-2.5 py-1 text-[11px] font-semibold text-ems-ok">Sumber DB</span>
       </div>
     </div>
 
@@ -490,7 +508,7 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex shrink-0 items-center gap-2 sm:ml-auto">
         <span data-date="ph" class="truncate text-xs tabular-nums text-ems-muted"><?= html_escape($power['tgl']) ?></span>
-        <span class="shrink-0 rounded-full bg-ems-ambersoft px-2.5 py-1 text-[11px] font-semibold text-ems-amberdeep">Sumber DB</span>
+        <span class="shrink-0 rounded-full bg-ems-ok/10 px-2.5 py-1 text-[11px] font-semibold text-ems-ok">Sumber DB</span>
       </div>
     </div>
 
@@ -556,3 +574,4 @@ $tarif_num = function ($v, $dec) {
 <script src="<?php echo base_url('assets/js/mqtt.min.js'); ?>"></script>
 <script src="<?php echo base_url('assets/js/lvmdp-live.js'); ?>"></script>
 <script src="<?php echo base_url('assets/js/lvmdp-trend.js'); ?>"></script>
+<script src="<?php echo base_url('assets/js/lvmdp-tarif7.js'); ?>"></script>

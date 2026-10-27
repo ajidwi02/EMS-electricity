@@ -165,6 +165,29 @@ body {
 .is-visible .chart-line { animation: ems-draw 1.4s ease forwards 0.3s; }
 .is-visible .chart-line.delay-2 { animation-delay: 0.55s; }
 
+/* ==========================================================================
+   T-T-H: hover interaktif pada grouped bar chart "Total Tarif Harian"
+   — bar dimming saat hari lain aktif, active bar subtle lift, tooltip halus
+   ========================================================================== */
+.tarif7-bar {
+  transition: opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, filter;
+}
+/* Saat chart container punya state hover aktif, dim semua bar kecuali hari aktif */
+#tarif7-chart.has-hover .tarif7-bar { opacity: 0.3; }
+#tarif7-chart.has-hover .tarif7-bar.is-active { opacity: 1; filter: brightness(1.08); }
+
+.tarif7-zone { cursor: crosshair; }
+
+/* Tooltip enter/exit — starts invisible + translated up, transitions to visible */
+#tarif7-tip { opacity: 0; transform: translateX(-50%) translateY(4px); }
+#tarif7-tip.is-shown { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Label x-axis: highlight active day */
+.tarif7-xlabel { transition: color 0.18s ease, font-weight 0.18s ease; }
+.tarif7-xlabel.is-active { color: var(--ems-ink); font-weight: 600; }
+
 /* Hormati pengguna yang menonaktifkan animasi */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -177,4 +200,5 @@ body {
     animation: none;
   }
   #sidebar, #overlay { transition: none; }
+  .tarif7-bar, #tarif7-tip, #tarif7-hx { transition: none; }
 }

@@ -264,6 +264,148 @@ class Readings_model extends CI_Model {
   }
 
   /**
+   * Ambil konfigurasi tarif aktif (1 baris, terbaru).
+   * Return: array row, atau NULL bila tidak ada config aktif.
+   */
+  public function get_tariff_config()
+  {
+    $sql = "SELECT *"
+      . " FROM `ems_tariff_config`"
+      . " WHERE `is_active` = 1"
+      . " ORDER BY `id` DESC"
+      . " LIMIT 1";
+    $row = $this->db->query($sql)->row_array();
+    return empty($row) ? NULL : $row;
+  }
+
+  /**
+   * Helper: selisih MAX-MIN kWh kumulatif dalam rentang waktu untuk 1 panel.
+   * Butuh minimal 2 titik data untuk selisih; 0/1 titik → kwh = 0.0.
+   * Guard: jika meter di-reset (selisih negatif), treat as 0.
+   *
+   * @param int    $panel_id  ID panel
+   * @param string $from      'Y-m-d H:i:s' awal rentang (inklusif)
+   * @param string $to        'Y-m-d H:i:s' akhir rentang (inklusif)
+   * @return array  ('kwh' => float, 'n' => int jumlah baris)
+   */
+  protected function _kwh_range($panel_id, $from, $to)
+  {
+    $sql = "SELECT MAX(`kwh`) AS kwh_max, MIN(`kwh`) AS kwh_min, COUNT(*) AS n"
+      . " FROM `data_electricity_iot5`"
+      . " WHERE `panel_id` = ?"
+      . "   AND `recorded_at` >= ?"
+      . "   AND `recorded_at` <= ?";
+    $row = $this->db->query($sql, array(
+      (int) $panel_id,
+      (string) $from,
+      (string) $to,
+    ))->row_array();
+
+    $n = ($row === NULL || !isset($row['n'])) ? 0 : (int) $row['n'];
+    if ($n < 2 || $row['kwh_max'] === NULL || $row['kwh_min'] === NULL) {
+      return array('kwh' => 0.0, 'n' => $n);
+    }
+    $diff = (float) $row['kwh_max'] - (float) $row['kwh_min'];
+    return array('kwh' => ($diff > 0.0) ? $diff : 0.0, 'n' => $n);
+  }
+
+  /**
+   * Konsumsi kWh per blok TOU untuk 1 hari kalender (WIB).
+   * Menghitung dari selisih kWh kumulatif (MAX - MIN) per rentang jam blok.
+   * LWBP2 bungkus tengah malam: 2 query (22:00-23:59 + 00:00-05:59) per hari kalender.
+   *
+   * Kontrak $tou_hours: array('wbp' => array(17,22), 'lwbp1' => array(6,17), 'lwbp2' => array(22,6))
+   *   — jam [0] = start (inklusif), jam [1] = end (eksklusif, menit terakhir = end-1 :59).
+   *
+   * @param int    $panel_id   ID panel
+   * @param string $date       Tanggal 'Y-m-d' (WIB)
+   * @param array  $tou_hours  Jam blok TOU dari config
+   * @return array  'lwbp1','lwbp2','wbp' (float kWh), 'lwbp','total',
+   *                'n_lwbp1','n_lwbp2','n_wbp' (jumlah baris data per blok), 'has_data' (bool)
+   */
+  public function kwh_by_tou_block($panel_id, $date, $tou_hours)
+  {
+    $result = array(
+      'lwbp1' => 0.0, 'lwbp2' => 0.0, 'wbp' => 0.0,
+      'lwbp'  => 0.0, 'total' => 0.0,
+      'n_lwbp1' => 0, 'n_lwbp2' => 0, 'n_wbp' => 0,
+      'has_data' => FALSE,
+    );
+
+    // WBP: contiguous — misal 17:00:00 s/d 21:59:00
+    $wbp = $this->_kwh_range(
+      $panel_id,
+      $date . ' ' . sprintf('%02d:00:00', $tou_hours['wbp'][0]),
+      $date . ' ' . sprintf('%02d:59:00', $tou_hours['wbp'][1] - 1)
+    );
+    $result['wbp']   = $wbp['kwh'];
+    $result['n_wbp'] = $wbp['n'];
+
+    // LWBP1: contiguous — misal 06:00:00 s/d 16:59:00
+    $lwbp1 = $this->_kwh_range(
+      $panel_id,
+      $date . ' ' . sprintf('%02d:00:00', $tou_hours['lwbp1'][0]),
+      $date . ' ' . sprintf('%02d:59:00', $tou_hours['lwbp1'][1] - 1)
+    );
+    $result['lwbp1']   = $lwbp1['kwh'];
+    $result['n_lwbp1'] = $lwbp1['n'];
+
+    // LWBP2: bungkus tengah malam — 2 rentang per hari KALENDER
+    //   Bagian malam: lwbp2_start s/d 23:59 (misal 22:00:00 - 23:59:00)
+    //   Bagian pagi:  00:00 s/d lwbp2_end-1 (misal 00:00:00 - 05:59:00)
+    $lwbp2_malam = $this->_kwh_range(
+      $panel_id,
+      $date . ' ' . sprintf('%02d:00:00', $tou_hours['lwbp2'][0]),
+      $date . ' 23:59:00'
+    );
+    $lwbp2_pagi = $this->_kwh_range(
+      $panel_id,
+      $date . ' 00:00:00',
+      $date . ' ' . sprintf('%02d:59:00', $tou_hours['lwbp2'][1] - 1)
+    );
+    $result['lwbp2']   = $lwbp2_malam['kwh'] + $lwbp2_pagi['kwh'];
+    $result['n_lwbp2'] = $lwbp2_malam['n'] + $lwbp2_pagi['n'];
+
+    // Totals
+    $result['lwbp']  = $result['lwbp1'] + $result['lwbp2'];
+    $result['total'] = $result['lwbp'] + $result['wbp'];
+    $result['has_data'] = ($result['n_lwbp1'] + $result['n_lwbp2'] + $result['n_wbp']) > 0;
+
+    return $result;
+  }
+
+  /**
+   * Konsumsi kWh per blok TOU per hari, N hari terakhir.
+   * Memanggil kwh_by_tou_block() per hari secara terpisah.
+   *
+   * @param int   $panel_id   ID panel
+   * @param int   $days       Jumlah hari (default 7)
+   * @param array $tou_hours  Jam blok TOU (dari config)
+   * @return array  Indexed 0..N-1 (tertua→terbaru), tiap elemen = kwh_by_tou_block()
+   *                result + 'date' (Y-m-d) + 'label' (j Bln WIB)
+   */
+  public function kwh_daily_by_tou($panel_id, $days, $tou_hours)
+  {
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+    $result = array();
+    $days = max(1, (int) $days);
+
+    for ($offset = $days - 1; $offset >= 0; $offset--) {
+      $dt = new DateTime(($offset === 0) ? 'today' : ('-' . $offset . ' days'), $tz);
+      $date_str = $dt->format('Y-m-d');
+      $label    = $dt->format('j') . ' ' . $bulan[(int) $dt->format('n')];
+
+      $block = $this->kwh_by_tou_block($panel_id, $date_str, $tou_hours);
+      $block['date']  = $date_str;
+      $block['label'] = $label;
+      $result[] = $block;
+    }
+    return $result;
+  }
+
+  /**
    * Sanitasi metrik: hanya 12 field whitelist; wajib numerik, else NULL (§7.2).
    * NULL = "tidak ada data", bukan 0 (§3.2 readings).
    */
