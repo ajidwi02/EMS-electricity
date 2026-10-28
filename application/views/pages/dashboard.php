@@ -90,9 +90,9 @@ $pts_str = trim($pts_str);
   </div>
 </div>
 
-<div class="grid grid-cols-1 gap-4 lg:grid-cols-5">
+<div class="grid grid-cols-1 gap-4">
   <!-- Ringkasan sistem: per-panel, nilai terbaru dari DB -->
-  <div class="reveal rounded-lg border border-ems-line bg-white lg:col-span-3" style="--reveal-delay: 200ms">
+  <div class="reveal rounded-lg border border-ems-line bg-white" style="--reveal-delay: 200ms">
     <div class="border-b border-ems-line px-4 py-3 md:px-6">
       <h2 class="truncate text-sm font-semibold">Ringkasan Sistem</h2>
       <p class="truncate text-xs text-ems-muted">Panel aktif · nilai terbaru &amp; konsumsi hari ini (WIB)</p>
@@ -142,57 +142,4 @@ $pts_str = trim($pts_str);
     </div>
   </div>
 
-  <!-- Color palette industri: Graphite + Concrete + Signal Amber -->
-  <div class="reveal flex flex-col gap-4 rounded-lg border border-ems-line bg-white p-4 md:p-6 lg:col-span-2" style="--reveal-delay: 280ms">
-    <div class="flex min-w-0 flex-col">
-      <h2 class="truncate text-sm font-semibold">Industrial Palette</h2>
-      <p class="text-xs text-ems-muted">90% netral + 10% amber — tenang seperti panel gardu.</p>
-    </div>
-    <div class="flex flex-col gap-2.5">
-      <div class="flex items-center gap-3">
-        <span class="size-8 shrink-0 rounded-lg border border-ems-line" style="background:#14171B"></span>
-        <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">Graphite 900 — Sidebar</span>
-          <span class="truncate text-xs text-ems-muted">#14171B</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="size-8 shrink-0 rounded-lg border border-ems-line" style="background:#1E2329"></span>
-        <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">Graphite 800 — Active item</span>
-          <span class="truncate text-xs text-ems-muted">#1E2329</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="size-8 shrink-0 rounded-lg border border-ems-line" style="background:#F2F3F0"></span>
-        <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">Concrete — Background</span>
-          <span class="truncate text-xs text-ems-muted">#F2F3F0</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="flex size-8 shrink-0 rounded-lg" style="background:#EAA500"></span>
-        <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">Signal Amber — Aksen energi</span>
-          <span class="truncate text-xs text-ems-muted">#EAA500 · dipakai hemat</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="flex size-8 shrink-0 rounded-lg" style="background:#1A7F4D"></span>
-        <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">Moss — Status normal</span>
-          <span class="truncate text-xs text-ems-muted">#1A7F4D</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="size-8 shrink-0 rounded-lg border border-ems-line" style="background:#FFFFFF"></span>
-        <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-semibold">Card White — Permukaan</span>
-          <span class="truncate text-xs text-ems-muted">#FFFFFF · border #E3E5E0</span>
-        </div>
-      </div>
-    </div>
-    <div class="h-px bg-ems-line" role="separator"></div>
-    <p class="text-xs leading-relaxed text-ems-muted">Aturan pakai: teks utama <span class="font-semibold text-ems-ink">#191C1F</span>, muted <span class="font-semibold text-ems-ink">#6B7280</span>, jangan tambah warna lain sebelum modul grafik.</p>
   </div>
-</div>
