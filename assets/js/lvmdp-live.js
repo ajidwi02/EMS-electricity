@@ -69,7 +69,8 @@
 
   function isOurTopic(t) {
     var p = String(t).split('/');
-    return p.length === 4 && p[0] === 'data' && p[1] === 'ems' && p[2] === 'lvmdp';
+    var exp = String(topic || '').split('/')[2] || 'lvmdp';
+    return p.length === 4 && p[0] === 'data' && p[1] === 'ems' && p[2] === exp;
   }
 
   function formatNowWib() {
@@ -347,7 +348,8 @@
 
   function render(d) {
     if (typeof d !== 'object' || d === null) return;
-    if (d._groupName !== 'lvmdp') return;
+    var expGroup = String(topic || '').split('/')[2] || 'lvmdp';
+    if (d._groupName !== expGroup) return;
     var i;
     for (i = 0; i < fields.length; i++) {
       (function (el) {
@@ -391,7 +393,7 @@
   setConn('Menghubungkan…', 'idle');
 
   var opts = {
-    clientId: 'web_lvmdp_' + Math.random().toString(16).slice(2, 10),
+    clientId: 'web_' + String(topic || '').split('/')[2] + '_' + Math.random().toString(16).slice(2, 10),
     clean: true,
     keepalive: 30,
     reconnectPeriod: 2000,

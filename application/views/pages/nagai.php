@@ -1,13 +1,7 @@
 <?php defined('BASEPATH') OR exit('No direct script access allowed');
-?>
-<div class="rounded-lg border border-ems-line bg-white">
-  <div class="border-b border-ems-line px-4 py-3 md:px-6">
-    <h2 class="truncate text-sm font-semibold">Panel Nagai</h2>
-  </div>
-  <?php $this->load->view('partials/empty_state', array(
-    'icon'  => 'boxes',
-    'title' => 'Belum ada data Nagai',
-    'desc'  => 'Parameter energi unit Nagai akan tampil di sini.',
-    'note'  => 'Modul akan diisi pada tahap berikutnya tanpa mengubah layout.',
-  )); ?>
-</div>
+// CP-055: Panel 3 (Nagai) = duplikat 1:1 dashboard Panel 1 (satu sumber markup:
+// pages/lvmdp.php). FASE 1 — topic & data masih data/ems/lvmdp/+ (spec
+// plans/ems-duplicate-lvmdp-puma-nagai.md). Stub hanya menyalurkan render;
+// variabel payload ($mqtt_*, $trends, $power, $tarif, $tarif7, dll.) diwariskan
+// dari $data render() via CI3 Loader cached-vars (Loader.php L944-945).
+$this->load->view('pages/lvmdp');

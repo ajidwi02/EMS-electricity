@@ -1,6 +1,8 @@
 <?php defined('BASEPATH') OR exit('No direct script access allowed');
 // Slot gauge LVMDP (G1): tiap card 3 unit. (f = field MQTT, label tampil, aria untuk screen reader.)
 // Zona + jarum digambar JS dari 1 tabel (plans/ems-lvmdp-gauge-charts.md §2.3). Tanpa JS: slot kosong + angka '-'.
+// CP-055: file ini = MASTER dashboard Panel 1 — juga dirender stub puma.php &
+// nagai.php (duplikat 1:1, FASE topic sama data/ems/lvmdp/+).
 $ln_gauges = array(
   array('f' => 'v_r', 'label' => 'V-R Fasa-Netral', 'aria' => 'Gauge V-R'),
   array('f' => 'v_s', 'label' => 'V-S Fasa-Netral', 'aria' => 'Gauge V-S'),
@@ -85,7 +87,7 @@ $tarif_num = function ($v, $dec) {
       </div>
       <div class="flex min-w-0 flex-col gap-1 md:ml-auto">
         <span class="text-[11px] font-medium uppercase tracking-wider text-ems-muted">Topic</span>
-        <span class="truncate text-xs text-ems-muted">data/ems/lvmdp/+</span>
+        <span class="truncate text-xs text-ems-muted"><?php echo html_escape(isset($mqtt_topic) ? $mqtt_topic : 'data/ems/lvmdp/+'); ?></span>
       </div>
     </div>
   </details>

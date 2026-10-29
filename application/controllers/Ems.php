@@ -2,9 +2,12 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
- * EMS — Energy Monitoring System
- * Halaman aktif: Dashboard, LVMDP, Export Data.
- * Puma & Nagai diblokir (CP-036, instruksi user) — dibuka lagi di M3.
+ * EMS — Energy Management System
+ * Satu controller untuk 5 halaman: Dashboard, LVMDP, Puma, Nagai, Export Data.
+ * CP-054: Puma & Nagai dibuka kembali (amandemen CP-036) — view empty-state.
+ * CP-055: /puma & /nagai = duplikat 1:1 dashboard LVMDP — satu logika
+ * panel_page(); topic & payload sama dengan Panel 1 (FASE topic per-panel =
+ * spec terpisah; plans/ems-duplicate-lvmdp-puma-nagai.md).
  */
 class Ems extends CI_Controller {
 
@@ -121,22 +124,50 @@ class Ems extends CI_Controller {
     ));
   }
 
-  // /lvmdp = gauge MQTT realtime (TIDAK berubah, CP-006…CP-008)
-  //        + kartu "Tren 24 Jam" DB-DINAMIS (L-T fase 2 — 3 sub-chart
-  //          Tegangan Fasa (L-N) / Tegangan Antar Fasa (L-L) / Arus; sumber
-  //          ems.data_electricity_iot5, kontrak §SS2-D6 plans/ems-lvmdp-db-trend.md)
-  //        + kartu "Konsumsi & Tarif Hari Kemarin" dummy (K-T fase 1 — kontrak §2.3
-  //          plans/ems-lvmdp-tarif-kemarin.md; rumus plans/perhitungan-tarif-listrik-wbp-lwbp.md §3.2B).
-  //        + kartu "Power Hari Ini" DB-DINAMIS (P-H fase 2; skala Y 0-600 kW pin user LOCKED).
-  //        + kartu "Total Tarif Harian" dummy (T-T-H fase 1 — kontrak §2
-  //          plans/ems-lvmdp-total-tarif-harian.md; skala Y Rp 0-10 juta pin user).
+  // Panel 1/2/3 (LVMDP/Puma/Nagai) — SATU logika dashboard (CP-055; spec
+  // plans/ems-duplicate-lvmdp-puma-nagai.md).
+  // FASE 1: duplikat 1:1 — topic MQTT data/ems/lvmdp/+ & payload DB panel
+  // 'lvmdp' dipakai SEMUA panel (instruksi user "meanwhile with the same topic").
+  // FASE 2 (spec terpisah): topic/panel DB per unit: data/ems/lvmdp2/+ dsb.
   public function lvmdp()
   {
+    $this->panel_page('lvmdp');
+  }
+
+  public function puma()
+  {
+    $this->panel_page('puma');
+  }
+
+  public function nagai()
+  {
+    $this->panel_page('nagai');
+  }
+
+  private function panel_page($key)
+  {
+    $pages = array(
+      'lvmdp' => array('view' => 'lvmdp', 'nav' => 'lvmdp', 'title' => 'LVMDP',
+        'subtitle' => 'Monitoring Low Voltage Main Distribution Panel'),
+      'puma'  => array('view' => 'puma', 'nav' => 'puma', 'title' => 'Puma',
+        'subtitle' => 'Monitoring panel / area Puma'),
+      'nagai' => array('view' => 'nagai', 'nav' => 'nagai', 'title' => 'Nagai',
+        'subtitle' => 'Monitoring panel / area Nagai'),
+    );
+    $p = $pages[$key];
+
+    $topics = array(
+      'lvmdp' => 'data/ems/lvmdp/+',
+      'puma'  => 'data/ems/lvmdp2/+',
+      'nagai' => 'data/ems/lvmdp3/+',
+    );
+    $mqtt_topic = (isset($topics[$key])) ? $topics[$key] : 'data/ems/lvmdp/+';
+
     $this->config->load('ems', TRUE);
     $ems = $this->config->item('ems');
     $extra = array(
       'mqtt_ws_url' => (is_array($ems) && isset($ems['ems_mqtt_ws_url'])) ? $ems['ems_mqtt_ws_url'] : 'ws://localhost:8083/mqtt',
-      'mqtt_topic'  => (is_array($ems) && isset($ems['ems_mqtt_topic'])) ? $ems['ems_mqtt_topic'] : 'data/ems/lvmdp/+',
+      'mqtt_topic'  => $mqtt_topic,
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
       'day_payload' => $this->lvmdp_day_payload(),
@@ -147,7 +178,7 @@ class Ems extends CI_Controller {
     $extra['power']  = $extra['day_payload']['power'];
     $extra['trends_json'] = json_encode($extra['day_payload']);
     $extra['trends_json'] = str_replace(array('<', '>'), array('\\u003c', '\\u003e'), $extra['trends_json']);
-    $this->render('lvmdp', 'lvmdp', 'LVMDP', 'Monitoring Low Voltage Main Distribution Panel', $extra);
+    $this->render($p['view'], $p['nav'], $p['title'], $p['subtitle'], $extra);
   }
 
   // L-T/P-H fase 2: payload chart 1 hari dari ems.data_electricity_iot5 (kontrak SS2-D6
@@ -671,20 +702,6 @@ class Ems extends CI_Controller {
       'sum'   => $sum,
       'src'   => 'db',      // CP-051: penanda sumber utk badge view
     );
-  }
-
-  // CP-036: DIBLOKIR atas instruksi user — menu sidebar + rute dimatikan,
-  // semua bentuk akses (short, legacy /ems/*, default-routing) -> 404.
-  // Buka lagi di milestone M3: kembalikan rute + body render di bawah ini.
-  public function puma()
-  {
-    show_404();
-  }
-
-  // CP-036: DIBLOKIR — lihat komentar puma().
-  public function nagai()
-  {
-    show_404();
   }
 
   // M4 fase 4a-2 + 4b: tabel historis dari DB `ems` + filter periode

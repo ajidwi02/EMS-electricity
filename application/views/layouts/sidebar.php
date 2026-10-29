@@ -37,7 +37,15 @@ function ems_nav_class($key, $active) {
       <p class="px-3 text-[11px] font-medium uppercase tracking-wider text-[#9AA1AD]">Monitoring</p>
       <a data-nav href="<?= site_url('lvmdp') ?>" class="<?= ems_nav_class('lvmdp', $active) ?>">
         <i data-lucide="zap" class="size-5 shrink-0"></i>
-        <span class="truncate">LVMDP</span>
+        <span class="truncate">Panel 1</span>
+      </a>
+      <a data-nav href="<?= site_url('puma') ?>" class="<?= ems_nav_class('puma', $active) ?>">
+        <i data-lucide="activity" class="size-5 shrink-0"></i>
+        <span class="truncate">Panel 2</span>
+      </a>
+      <a data-nav href="<?= site_url('nagai') ?>" class="<?= ems_nav_class('nagai', $active) ?>">
+        <i data-lucide="boxes" class="size-5 shrink-0"></i>
+        <span class="truncate">Panel 3</span>
       </a>
     </div>
 

@@ -272,7 +272,7 @@ final class MqttRecorder
 
     public function loadPanels()
     {
-        $res = $this->db->query('SELECT id, code FROM electricity_panel_iot5 WHERE is_active = 1');
+        $res = $this->db->query('SELECT id, code FROM electricity_panel_iot5');
         if ($res === FALSE) {
             throw new RuntimeException('SELECT electricity_panel_iot5 gagal: ' . $this->db->error);
         }

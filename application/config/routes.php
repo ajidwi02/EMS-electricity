@@ -53,14 +53,15 @@ $route['default_controller'] = 'ems';
 $route['404_override'] = '';
 $route['translate_uri_dashes'] = FALSE;
 
-// EMS short URLs — contoh: http://electrical/dashboard, /lvmdp, /export-data.
+// EMS short URLs — contoh: http://electrical/dashboard, /lvmdp, /puma, /nagai, /export-data.
 // (Bekerja juga sebagai subfolder: http://[::1]/electrical/dashboard)
-// Puma & Nagai DIBLOKIR (CP-036, instruksi user): rute short + legacy dihapus —
-// akses URL apa pun -> 404 via guard controller (lihat Ems::puma()/nagai()).
+// Puma & Nagai DIBUKA KEMBALI (CP-054, instruksi user — amandemen CP-036).
 $route['dashboard'] = 'ems/dashboard';
 $route['lvmdp'] = 'ems/lvmdp';
 $route['lvmDP'] = 'ems/lvmdp';
 $route['LVMDP'] = 'ems/lvmdp';
+$route['puma'] = 'ems/puma';
+$route['nagai'] = 'ems/nagai';
 $route['export-data'] = 'ems/export_data';
 $route['export_data'] = 'ems/export_data';
 $route['export'] = 'ems/export_data';
@@ -72,6 +73,8 @@ $route['ems/dashboard'] = 'ems/dashboard';
 $route['ems/lvmdp'] = 'ems/lvmdp';
 $route['ems/lvmDP'] = 'ems/lvmdp';
 $route['ems/LVMDP'] = 'ems/lvmdp';
+$route['ems/puma'] = 'ems/puma';
+$route['ems/nagai'] = 'ems/nagai';
 $route['ems/export_data'] = 'ems/export_data';
 $route['ems/export-data'] = 'ems/export_data';
 $route['ems/lvmdp/trend'] = 'ems/lvmdp_trend';
