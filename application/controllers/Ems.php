@@ -128,7 +128,9 @@ class Ems extends CI_Controller {
   // plans/ems-duplicate-lvmdp-puma-nagai.md).
   // FASE 1: duplikat 1:1 — topic MQTT data/ems/lvmdp/+ & payload DB panel
   // 'lvmdp' dipakai SEMUA panel (instruksi user "meanwhile with the same topic").
-  // FASE 2 (spec terpisah): topic/panel DB per unit: data/ems/lvmdp2/+ dsb.
+  // FASE-T (CP-062; plans/ems-tarif-per-panel-puma-nagai.md): topic realtime
+  // per panel (CP-058) + kartu K-T/T-T-H dari panel DB per panel
+  // (lvmdp/lvmdp2/lvmdp3).
   public function lvmdp()
   {
     $this->panel_page('lvmdp');
@@ -146,22 +148,23 @@ class Ems extends CI_Controller {
 
   private function panel_page($key)
   {
+    // FASE-T (CP-062; plans/ems-tarif-per-panel-puma-nagai.md): peta SATU titik
+    // key → code (kode DB = group topik, tanpa peta topik kedua).
     $pages = array(
-      'lvmdp' => array('view' => 'lvmdp', 'nav' => 'lvmdp', 'title' => 'LVMDP',
+      'lvmdp' => array('view' => 'lvmdp', 'nav' => 'lvmdp', 'title' => 'LVMDP', 'code' => 'lvmdp',
         'subtitle' => 'Monitoring Low Voltage Main Distribution Panel'),
-      'puma'  => array('view' => 'puma', 'nav' => 'puma', 'title' => 'Puma',
+      'puma'  => array('view' => 'puma', 'nav' => 'puma', 'title' => 'Puma', 'code' => 'lvmdp2',
         'subtitle' => 'Monitoring panel / area Puma'),
-      'nagai' => array('view' => 'nagai', 'nav' => 'nagai', 'title' => 'Nagai',
+      'nagai' => array('view' => 'nagai', 'nav' => 'nagai', 'title' => 'Nagai', 'code' => 'lvmdp3',
         'subtitle' => 'Monitoring panel / area Nagai'),
     );
-    $p = $pages[$key];
+    if (!isset($pages[$key])) {
+      $key = 'lvmdp';
+    }
+    $p    = $pages[$key];
+    $code = $p['code'];
 
-    $topics = array(
-      'lvmdp' => 'data/ems/lvmdp/+',
-      'puma'  => 'data/ems/lvmdp2/+',
-      'nagai' => 'data/ems/lvmdp3/+',
-    );
-    $mqtt_topic = (isset($topics[$key])) ? $topics[$key] : 'data/ems/lvmdp/+';
+    $mqtt_topic = 'data/ems/' . $code . '/+';   // deriver: hasil string PERSIS sama dengan hard-code lama
 
     $this->config->load('ems', TRUE);
     $ems = $this->config->item('ems');
@@ -171,8 +174,8 @@ class Ems extends CI_Controller {
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
       'day_payload' => $this->lvmdp_day_payload(),
-      'tarif'       => $this->tarif_kemarin_db(),
-      'tarif7'      => $this->tarif7_harian_db(),
+      'tarif'       => $this->tarif_kemarin_db($code),   // FASE-T: per-panel
+      'tarif7'      => $this->tarif7_harian_db($code),   // FASE-T: per-panel
     );
     $extra['trends'] = $extra['day_payload'];
     $extra['power']  = $extra['day_payload']['power'];
@@ -522,7 +525,9 @@ class Ems extends CI_Controller {
    * Kontrak output SAMA PERSIS dengan tarif_kemarin_dummy() sehingga view BEKU.
    * Jika tidak ada data/config → fallback ke data dummy (safety).
    */
-  private function tarif_kemarin_db()
+  // FASE-T (CP-062; plans/ems-tarif-per-panel-puma-nagai.md): $code = kode DB
+  // panel (lvmdp|lvmdp2|lvmdp3) yang dipassing panel_page().
+  private function tarif_kemarin_db($code = 'lvmdp')
   {
     $this->load->model('Readings_model');
     $tz    = new DateTimeZone('Asia/Jakarta');
@@ -549,10 +554,10 @@ class Ems extends CI_Controller {
                . $bulan[(int) $yesterday->format('n')] . ' '
                . $yesterday->format('Y') . ' (WIB)';
 
-    // 4) Panel LVMDP
-    $pid = $this->Readings_model->panel_id_by_code('lvmdp');
+    // 4) Panel sesuai halaman (FASE-T CP-062: sebelumnya hard-code 'lvmdp')
+    $pid = $this->Readings_model->panel_id_by_code($code);
     if ($pid === NULL) {
-      return $this->tarif_kemarin_dummy();
+      return $this->tarif_kemarin_dummy();   // panel tak terdaftar -> dummy JUJUR
     }
 
     // 5) Hitung kWh per blok
@@ -597,7 +602,9 @@ class Ems extends CI_Controller {
    * Kontrak output SAMA PERSIS dengan tarif7_harian_dummy() sehingga view BEKU.
    * Jika tidak ada data/config → fallback ke data dummy (safety).
    */
-  private function tarif7_harian_db()
+  // FASE-T (CP-062; plans/ems-tarif-per-panel-puma-nagai.md): $code = kode DB
+  // panel (lvmdp|lvmdp2|lvmdp3) yang dipassing panel_page().
+  private function tarif7_harian_db($code = 'lvmdp')
   {
     $this->load->model('Readings_model');
     $tz    = new DateTimeZone('Asia/Jakarta');
@@ -617,10 +624,10 @@ class Ems extends CI_Controller {
       'lwbp2' => array((int) substr($config['lwbp2_start'], 0, 2), (int) substr($config['lwbp2_end'], 0, 2)),
     );
 
-    // 3) Panel LVMDP
-    $pid = $this->Readings_model->panel_id_by_code('lvmdp');
+    // 3) Panel sesuai halaman (FASE-T CP-062: sebelumnya hard-code 'lvmdp')
+    $pid = $this->Readings_model->panel_id_by_code($code);
     if ($pid === NULL) {
-      return $this->tarif7_harian_dummy();
+      return $this->tarif7_harian_dummy();   // panel tak terdaftar -> dummy JUJUR
     }
 
     // 4) Data 7 hari per blok
@@ -722,6 +729,19 @@ class Ems extends CI_Controller {
       $custom_open = TRUE;   // form custom terbuka selama permintaan filter=custom
     }
 
+    // 2b) Filter panel: whitelist panel nama ("Panel 1".."Panel N", '' = Semua).
+    $panel_raw = (string) $this->input->get('panel');
+    $valid_panels = array();
+    foreach (array(1, 2, 3) as $p) { $valid_panels[] = 'Panel ' . $p; }
+    $panel_id = 0;
+    if ($panel_raw !== '' && in_array($panel_raw, $valid_panels, TRUE)) {
+      $this->load->model('Readings_model');
+      $row = $this->db->select('id')
+        ->where('name', $panel_raw)
+        ->get('electricity_panel_iot5')->row_array();
+      $panel_id = isset($row['id']) ? (int) $row['id'] : 0;
+    }
+
     // 2) Resolusi rentang [from, to] (Y-m-d WIB).
     $from_raw = (string) $this->input->get('from');
     $to_raw   = (string) $this->input->get('to');
@@ -750,7 +770,7 @@ class Ems extends CI_Controller {
     //    -> satu query LIMIT/OFFSET (spec filters §9 — jangan seret semua baris DB ke PHP).
     $this->load->model('Readings_model');
     $per   = 50;
-    $total = $this->Readings_model->count_range($from, $to);
+    $total = $this->Readings_model->count_range($from, $to, $panel_id);
     $pages = ($total > 0) ? (int) ceil($total / $per) : 1;
     $page  = (int) $this->input->get('page');
     if ($page < 1)      { $page = 1; }
@@ -760,7 +780,7 @@ class Ems extends CI_Controller {
     // Kontrak 4a-2 dipertahankan: baris shape sama (`time` 'Y-m-d H:i' + `panel` + 12 metrik).
     $rows = array();
     if ($total > 0) {
-      $rows = $this->Readings_model->range_page($from, $to, $per, $offset);
+      $rows = $this->Readings_model->range_page($from, $to, $per, $offset, $panel_id);
     }
 
     $this->render('export_data', 'export', 'Export Data', 'Unduh data historis energi', array(
@@ -776,6 +796,7 @@ class Ems extends CI_Controller {
       'to'             => $to,
       'custom_open'    => $custom_open,
       'custom_warning' => $warning,
+      'panel_filter'   => ($panel_raw !== '' && in_array($panel_raw, $valid_panels, TRUE)) ? $panel_raw : '',
     ));
   }
 
@@ -810,4 +831,342 @@ class Ems extends CI_Controller {
     $p = explode('-', $s);
     return checkdate((int) $p[1], (int) $p[2], (int) $p[0]);
   }
+
+  // -------------------------------------------------------------------------
+  // Export unduh (CSV / XLSX / PDF) — native PHP, tanpa dependensi eksternal
+  // -------------------------------------------------------------------------
+
+  public function export_download()
+  {
+    $allowed_format = array('csv', 'xlsx', 'pdf');
+    $format = strtolower((string) $this->input->get('format'));
+    if (!in_array($format, $allowed_format, TRUE)) {
+      $format = 'csv';
+    }
+
+    $allowed = array('today', 'week', 'month', 'prev-month', 'custom');
+    $filter = (string) $this->input->get('filter');
+    if (!in_array($filter, $allowed, TRUE)) {
+      $filter = 'today';
+    }
+
+    $panel_raw = (string) $this->input->get('panel');
+    $valid_panels = array('', 'Panel 1', 'Panel 2', 'Panel 3');
+    $panel_id = 0;
+    $this->load->database();
+    if ($panel_raw !== '' && in_array($panel_raw, $valid_panels, TRUE)) {
+      $row = $this->db->select('id')
+        ->where('name', $panel_raw)
+        ->get('electricity_panel_iot5')->row_array();
+      $panel_id = isset($row['id']) ? (int) $row['id'] : 0;
+    }
+
+    $from_raw = (string) $this->input->get('from');
+    $to_raw   = (string) $this->input->get('to');
+    $from = '';
+    $to   = '';
+    if ($filter === 'custom'
+        && $this->valid_date($from_raw)
+        && $this->valid_date($to_raw)
+        && $from_raw <= $to_raw) {
+      $from = $from_raw;
+      $to   = $to_raw;
+    } else {
+      $range = $this->filter_range($filter === 'custom' ? 'today' : $filter);
+      $from  = $range[0];
+      $to    = $range[1];
+    }
+
+    $this->load->model('Readings_model');
+    $rows = $this->Readings_model->range_all($from, $to, $panel_id);
+
+    $panel_label = ($panel_id > 0) ? $panel_raw : 'semua';
+    $filename    = 'ems_export_' . $filter . '_' . $from . '_' . $to . '_' . $panel_label . '.' . $format;
+
+    // Hentikan output buffering agar header/file langsung terkirim (stream)
+    while (ob_get_level()) {
+      ob_end_clean();
+    }
+
+    header('Pragma: public');
+    header('Expires: 0');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    header('Content-Description: File Transfer');
+    header('Content-Transfer-Encoding: binary');
+
+    if ($format === 'csv') {
+      $this->_export_csv($rows, $filename);
+    } elseif ($format === 'xlsx') {
+      $this->_export_xlsx($rows, $filename);
+    } else {
+      $this->_export_pdf($rows, $filename, $filter, $from, $to, $panel_label);
+    }
+    exit;
+  }
+
+  private function _export_csv(array $rows, $filename)
+  {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'w');
+    fputs($out, "\xEF\xBB\xBF"); // UTF-8 BOM agar Excel membaca benar
+    fputcsv($out, array(
+      'Waktu Catat', 'Panel',
+      'Tegangan R-N (V)', 'Tegangan S-N (V)', 'Tegangan T-N (V)',
+      'Tegangan R-S (V)', 'Tegangan S-T (V)', 'Tegangan R-T (V)',
+      'Arus R (A)', 'Arus S (A)', 'Arus T (A)',
+      'PF', 'Daya Aktif (kW)', 'Energi (kWh)',
+    ));
+    foreach ($rows as $r) {
+      fputcsv($out, array(
+        $r['time'], $r['panel'],
+        $r['v_r'], $r['v_s'], $r['v_t'], $r['v_rs'], $r['v_st'], $r['v_rt'],
+        $r['i_r'], $r['i_s'], $r['i_t'], $r['pf'], $r['kw'], $r['kwh'],
+      ));
+    }
+    fclose($out);
+  }
+
+  private function _export_xlsx(array $rows, $filename)
+  {
+    $tmp = tempnam(sys_get_temp_dir(), 'ems_xlsx_');
+    $zip = new ZipArchive();
+    if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+      header('HTTP/1.1 500 Internal Server Error');
+      echo 'Gagal membuat file Excel.';
+      exit;
+    }
+
+    $esc = function ($s) {
+      return htmlspecialchars((string) $s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    };
+
+    $col = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N');
+    $headers = array(
+      'Waktu Catat', 'Panel',
+      'Tegangan R-N (V)', 'Tegangan S-N (V)', 'Tegangan T-N (V)',
+      'Tegangan R-S (V)', 'Tegangan S-T (V)', 'Tegangan R-T (V)',
+      'Arus R (A)', 'Arus S (A)', 'Arus T (A)',
+      'PF', 'Daya Aktif (kW)', 'Energi (kWh)',
+    );
+
+    $sheet = '<sheetData>';
+    $sheet .= '<row r="1" spans="1:14">';
+    foreach ($headers as $i => $h) {
+      $sheet .= '<c r="' . $col[$i] . '1" t="inlineStr"><is><t>' . $esc($h) . '</t></is></c>';
+    }
+    $sheet .= '</row>';
+
+    $r = 2;
+    foreach ($rows as $row) {
+      $sheet .= '<row r="' . $r . '" spans="1:14">';
+      $vals = array(
+        $row['time'], $row['panel'],
+        $row['v_r'], $row['v_s'], $row['v_t'], $row['v_rs'], $row['v_st'], $row['v_rt'],
+        $row['i_r'], $row['i_s'], $row['i_t'], $row['pf'], $row['kw'], $row['kwh'],
+      );
+      foreach ($vals as $i => $v) {
+        $ref = $col[$i] . $r;
+        if ($i <= 1) {
+          $sheet .= '<c r="' . $ref . '" t="inlineStr"><is><t>' . $esc($v !== NULL ? $v : '') . '</t></is></c>';
+        } elseif ($v !== NULL) {
+          $sheet .= '<c r="' . $ref . '"><v>' . (float) $v . '</v></c>';
+        }
+      }
+      $sheet .= '</row>';
+      $r++;
+    }
+    $sheet .= '</sheetData>';
+
+    $zip->addFromString('[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' .
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' .
+      '<Default Extension="xml" ContentType="application/xml"/>' .
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' .
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' .
+      '</Types>');
+    $zip->addFromString('_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' .
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' .
+      '</Relationships>');
+    $zip->addFromString('xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' .
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' .
+      '</Relationships>');
+    $zip->addFromString('xl/workbook.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' .
+      '<sheets><sheet name="Export" sheetId="1" r:id="rId1"/></sheets></workbook>');
+    $zip->addFromString('xl/worksheets/sheet1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' . $sheet . '</worksheet>');
+    $zip->close();
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . filesize($tmp));
+    readfile($tmp);
+    unlink($tmp);
+    exit;
+  }
+
+  private function _to_latin1($s)
+  {
+    if (function_exists('mb_convert_encoding')) {
+      return mb_convert_encoding((string) $s, 'Windows-1252', 'UTF-8');
+    }
+    return (string) $s;
+  }
+
+  private function _pdf_txt($s)
+  {
+    $s = $this->_to_latin1($s);
+    return str_replace(array('\\', '(', ')'), array('\\\\', '\\(', '\\)'), $s);
+  }
+
+  private function _export_pdf(array $rows, $filename, $filter, $from, $to, $panel_label)
+  {
+    $W = 792; $H = 612;                       // landscape letter
+    $ml = 30; $mr = 30; $mt = 34; $mb = 36;
+    $usableW = $W - $ml - $mr;
+
+    $colW = array(70, 44, 46, 46, 46, 46, 46, 46, 40, 40, 40, 34, 42, 44);
+    $headers = array('Waktu Catat', 'Panel',
+      'Teg R-N', 'Teg S-N', 'Teg T-N', 'Teg R-S', 'Teg S-T', 'Teg R-T',
+      'Arus R', 'Arus S', 'Arus T', 'PF', 'kW', 'kWh');
+    $unit = array('', '', 'V', 'V', 'V', 'V', 'V', 'V', 'A', 'A', 'A', '', 'kW', 'kWh');
+
+    $rowH  = 13;
+    $headH = 16;
+    $title = 'Export Data — ' . ucfirst($filter) . ' (' . $from . ' s/d ' . $to . ') · Panel ' . $panel_label;
+
+    // PENTING: tiap teks satu blok BT..ET sendiri karena Td setelah Td pertama
+    // sifatnya RELATIF — packing satu BT berisi banyak Td membuat kolom ke-2 dst
+    // melayang keluar halaman (penyebab PDF "kosong" sebelumnya).
+    $txtOp = function ($size, $font, $x, $yPdf, $t) {
+      return 'BT /' . $font . ' ' . $size . ' Tf ' . round($x, 2) . ' ' . round($yPdf, 2) . ' Td (' . $this->_pdf_txt($t) . ') Tj ET';
+    };
+    $lnOp = function ($x1, $y1, $x2, $y2) {
+      return $x1 . ' ' . $y1 . ' m ' . $x2 . ' ' . $y2 . ' l 0.5 w S';
+    };
+
+    $xBounds = array($ml);
+    $acc = $ml;
+    foreach ($colW as $w) { $acc += $w; $xBounds[] = $acc; }
+
+    $drawTitle = function (&$s) use ($H, $ml, $mt, $txtOp, $title) {
+      $s .= $txtOp(11, 'F2', $ml, $H - $mt + 10, $title) . "\n";
+    };
+
+    $drawHeader = function (&$s, $ycTop) use ($H, $ml, $usableW, $colW, $headers, $unit, $headH, $lnOp, $txtOp) {
+      $s .= $lnOp($ml, $H - $ycTop, $ml + $usableW, $H - $ycTop) . "\n";
+      $s .= $lnOp($ml, $H - $ycTop - $headH, $ml + $usableW, $H - $ycTop - $headH) . "\n";
+      $x = $ml;
+      foreach ($headers as $i => $h) {
+        $label = $h . ($unit[$i] !== '' ? ' ' . $unit[$i] : '');
+        $tw = strlen($label) * 0.55 * 7.5;
+        $tx = $x + $colW[$i] / 2 - $tw / 2;
+        $s .= $txtOp(7.5, 'F2', $tx, $H - ($ycTop + $headH - 5), $label) . "\n";
+        $x += $colW[$i];
+      }
+      return $ycTop + $headH;
+    };
+
+    $closePage = function (&$s, $ycBottom) use ($H, $ml, $mt, $xBounds, $lnOp) {
+      foreach ($xBounds as $xb) {
+        $s .= $lnOp($xb, $H - $mt, $xb, $H - $ycBottom) . "\n";
+      }
+    };
+
+    $pages = array();
+    $cur = '';
+    $drawTitle($cur);
+    $yc = $drawHeader($cur, $mt);            // cursor baris (jarak dari atas)
+
+    $nap = function ($n, $dec = 1) {
+      return ($n === NULL || $n === '') ? '—' : number_format((float) $n, $dec, '.', '');
+    };
+
+    if (empty($rows)) {
+      $cur .= $txtOp(8, 'F1', $ml + 3, $H - ($yc + 10), 'Tidak ada data pada rentang ini.') . "\n";
+      $yc += 14;
+    }
+
+    foreach ($rows as $row) {
+      if ($yc + $rowH > $H - $mb) {
+        $cur = 'BT /F1 7 Tf ' . $ml . ' 18 Td (Halaman ' . (count($pages) + 1) . ') Tj ET' . "\n" . $cur;
+        $closePage($cur, $yc);
+        $pages[] = $cur;
+        $cur = '';
+        $drawTitle($cur);
+        $yc = $drawHeader($cur, $mt);
+      }
+      $vals = array(
+        $row['time'], $row['panel'],
+        $row['v_r'], $row['v_s'], $row['v_t'], $row['v_rs'], $row['v_st'], $row['v_rt'],
+        $row['i_r'], $row['i_s'], $row['i_t'], $row['pf'], $row['kw'], $row['kwh'],
+      );
+      $cur .= $lnOp($ml, $H - ($yc + $rowH), $ml + $usableW, $H - ($yc + $rowH)) . "\n";
+      $x = $ml;
+      foreach ($vals as $i => $v) {
+        $txt = ($v === NULL) ? '—' : (($i <= 1) ? (string) $v : $nap($v));
+        $cur .= $txtOp(7, 'F1', $x + 3, $H - ($yc + $rowH - 5), $txt) . "\n";
+        $x += $colW[$i];
+      }
+      $yc += $rowH;
+    }
+
+    $cur = 'BT /F1 7 Tf ' . $ml . ' 18 Td (Halaman ' . (count($pages) + 1) . ') Tj ET' . "\n" . $cur;
+    $closePage($cur, $yc);
+    $pages[] = $cur;
+
+    // Susun objek PDF (1-based): 1=Catalog, 2=Pages, 3=F1, 4=F2, lalu per halaman [content, page]
+    $objs = array();
+    $objs[] = '<< /Type /Catalog /Pages 2 0 R >>';
+    $objs[] = null;
+    $objs[] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+    $objs[] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+
+    $pageRefs = '';
+    $totalPages = count($pages);
+    for ($i = 0; $i < $totalPages; $i++) {
+      $contentNum = 5 + ($i * 2);
+      $pageNum    = 6 + ($i * 2);
+      $objs[] = '<< /Length ' . strlen($pages[$i]) . ' >> stream' . "\n" . $pages[$i] . "\nendstream";
+      $objs[] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' . $W . ' ' . $H . '] /Contents ' . $contentNum . ' 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>';
+      $pageRefs .= $pageNum . ' 0 R ';
+    }
+    $objs[1] = '<< /Type /Pages /Kids [' . trim($pageRefs) . '] /Count ' . $totalPages . ' >>';
+
+    $pdf = '%PDF-1.4' . "\n";
+    $xref = array('0000000000 65535 f ');
+    $pos = strlen($pdf);
+    foreach ($objs as $i => $obj) {
+      $num = $i + 1;
+      $xref[] = sprintf('%010d 00000 n ', $pos);
+      $pdf .= $num . ' 0 obj' . "\n" . $obj . "\nendobj" . "\n";
+      $pos = strlen($pdf);
+    }
+    $xrefPos = strlen($pdf);
+    $pdf .= 'xref' . "\n";
+    $pdf .= '0 ' . (count($objs) + 1) . "\n";
+    foreach ($xref as $line) {
+      $pdf .= $line . "\n";
+    }
+    $pdf .= 'trailer' . "\n";
+    $pdf .= '<< /Size ' . (count($objs) + 1) . ' /Root 1 0 R >>' . "\n";
+    $pdf .= 'startxref' . "\n";
+    $pdf .= $xrefPos . "\n";
+    $pdf .= '%%EOF' . "\n";
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($pdf));
+    echo $pdf;
+    exit;
+  }
+
 }

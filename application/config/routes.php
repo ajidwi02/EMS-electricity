@@ -63,6 +63,7 @@ $route['LVMDP'] = 'ems/lvmdp';
 $route['puma'] = 'ems/puma';
 $route['nagai'] = 'ems/nagai';
 $route['export-data'] = 'ems/export_data';
+$route['export-data/download'] = 'ems/export_download';
 $route['export_data'] = 'ems/export_data';
 $route['export'] = 'ems/export_data';
 $route['lvmdp/trend'] = 'ems/lvmdp_trend';

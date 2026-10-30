@@ -37,11 +37,15 @@ $chips = array(
 
 $range_txt = ($from === $to) ? $fmtDate($from) : $fmtDate($from) . ' – ' . $fmtDate($to);
 
-// prefix query pagination: selalu bawa filter aktif (custom -> bawa rentang)
+// prefix query pagination: selalu bawa filter aktif (custom -> bawa rentang; panel -> bawa panel terpilih)
+$pf = isset($panel_filter) ? $panel_filter : '';
 $fq = array('filter' => $filter_key);
 if ($filter_key === 'custom') {
   $fq['from'] = $from;
   $fq['to']   = $to;
+}
+if ($pf !== '') {
+  $fq['panel'] = $pf;
 }
 $pg_url = function ($n) use ($fq) {
   $q = $fq;
@@ -49,8 +53,8 @@ $pg_url = function ($n) use ($fq) {
   return site_url('export-data') . '?' . http_build_query($q);
 };
 
-// Tombol Export tetap disabled — unduh CSV/Excel = fase 4c berikutnya.
-$action = '<button type="button" disabled title="Segera hadir" class="flex cursor-not-allowed items-center gap-2 rounded-lg bg-graphite-950 px-4 py-2 text-sm font-medium text-white opacity-50"><i data-lucide="download" data-icon="inline-start" class="size-4"></i>Export</button>';
+// Tombol Export — buka modal pemilihan format (CSV / XLSX / PDF), data diunduh ke komputer lokal
+$action = '<button type="button" id="btnExport" title="Unduh data" class="flex items-center gap-2 rounded-lg bg-graphite-950 px-4 py-2 text-sm font-medium text-white hover:bg-graphite-800"><i data-lucide="download" data-icon="inline-start" class="size-4"></i>Export</button>';
 $this->load->view('partials/page_header', array('title' => $title, 'subtitle' => $subtitle, 'action' => $action));
 
 // --- Pagination list (algoritma deterministik CP-013, tetap) --------------
@@ -83,6 +87,17 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
         <h2 class="truncate text-sm font-semibold">Historis Pembacaan</h2>
         <p class="truncate text-xs text-ems-muted">Zona waktu WIB (Asia/Jakarta)</p>
       </div>
+      <div class="ml-2 flex items-center gap-1 shrink-0" role="group" aria-label="Filter panel">
+        <?php $pf = isset($panel_filter) ? $panel_filter : ''; ?>
+        <?php
+        // Bawa rentang tanggal kustom saat berpindah panel, agar filter tanggal tetap terpelihara
+        $date_qs = ($filter_key === 'custom') ? '&from=' . urlencode($from) . '&to=' . urlencode($to) : '';
+        ?>
+        <a href="<?= site_url('export-data?filter=' . urlencode($filter_key) . '&panel=' . $date_qs) ?>" class="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium <?= ($pf === '') ? 'bg-graphite-950 text-white' : 'bg-white text-ems-ink border border-ems-line hover:bg-[#F7F8F6]' ?>">Semua</a>
+        <a href="<?= site_url('export-data?filter=' . urlencode($filter_key) . '&panel=' . urlencode('Panel 1') . $date_qs) ?>" class="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium <?= ($pf === 'Panel 1') ? 'bg-graphite-950 text-white' : 'bg-white text-ems-ink border border-ems-line hover:bg-[#F7F8F6]' ?>">Panel 1</a>
+        <a href="<?= site_url('export-data?filter=' . urlencode($filter_key) . '&panel=' . urlencode('Panel 2') . $date_qs) ?>" class="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium <?= ($pf === 'Panel 2') ? 'bg-graphite-950 text-white' : 'bg-white text-ems-ink border border-ems-line hover:bg-[#F7F8F6]' ?>">Panel 2</a>
+        <a href="<?= site_url('export-data?filter=' . urlencode($filter_key) . '&panel=' . urlencode('Panel 3') . $date_qs) ?>" class="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium <?= ($pf === 'Panel 3') ? 'bg-graphite-950 text-white' : 'bg-white text-ems-ink border border-ems-line hover:bg-[#F7F8F6]' ?>">Panel 3</a>
+      </div>
       <span class="ml-auto shrink-0 text-xs tabular-nums text-ems-muted">
         Menampilkan <span class="font-semibold text-ems-ink"><?= (int) $floor_num ?>–<?= (int) $top_num ?></span>
         dari <span class="font-semibold text-ems-ink"><?= (int) $total ?></span> baris
@@ -97,7 +112,7 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
           <?php if ($key === $filter_key): ?>
             <span class="inline-flex h-8 items-center rounded-lg bg-graphite-950 px-3 text-xs font-medium text-white" aria-current="page"><?= html_escape($lbl) ?></span>
           <?php else: ?>
-            <a href="<?= site_url('export-data') . '?filter=' . $key ?>" class="inline-flex h-8 items-center rounded-lg border border-ems-line bg-white px-3 text-xs text-ems-ink hover:bg-[#F7F8F6]"><?= html_escape($lbl) ?></a>
+            <a href="<?= site_url('export-data') . '?filter=' . $key . ($pf !== '' ? '&panel=' . urlencode($pf) : '') ?>" class="inline-flex h-8 items-center rounded-lg border border-ems-line bg-white px-3 text-xs text-ems-ink hover:bg-[#F7F8F6]"><?= html_escape($lbl) ?></a>
           <?php endif; ?>
         <?php endforeach; ?>
         <?php if ($custom_warning !== ''): ?>
@@ -107,6 +122,7 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
       <?php if ($custom_open): ?>
         <form method="get" action="<?= site_url('export-data') ?>" class="flex flex-wrap items-center gap-2 sm:ml-auto" aria-label="Rentang tanggal kustom">
           <input type="hidden" name="filter" value="custom">
+          <?php if ($pf !== ''): ?><input type="hidden" name="panel" value="<?= html_escape($pf) ?>"><?php endif; ?>
           <input type="date" name="from" value="<?= html_escape($from) ?>" required aria-label="Tanggal mulai" class="h-8 rounded-lg border border-ems-line bg-white px-2 text-xs text-ems-ink">
           <span class="text-xs text-ems-muted">s/d</span>
           <input type="date" name="to" value="<?= html_escape($to) ?>" required aria-label="Tanggal akhir" class="h-8 rounded-lg border border-ems-line bg-white px-2 text-xs text-ems-ink">
@@ -200,4 +216,33 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
       </nav>
     </div>
   </div>
+
+  <!-- Modal pemilihan format export -->
+  <div id="exportModal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-black/40" onclick="document.getElementById('exportModal').classList.add('hidden')"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow p-6 w-96 border border-ems-line">
+      <h3 class="text-sm font-semibold text-ems-ink mb-4">Unduh Data Export</h3>
+      <form id="formExport" method="get" action="<?= site_url('export-data/download') ?>" class="flex flex-col gap-3">
+        <input type="hidden" name="filter" value="<?= html_escape($filter_key) ?>">
+        <input type="hidden" name="from" value="<?= html_escape($from) ?>">
+        <input type="hidden" name="to" value="<?= html_escape($to) ?>">
+        <input type="hidden" name="panel" value="<?= html_escape($pf) ?>">
+        <div>
+          <label class="block text-[11px] text-ems-muted mb-2">Format file</label>
+          <label class="flex items-center gap-2 text-xs text-ems-ink"><input type="radio" name="format" value="csv" checked> CSV (.csv)</label>
+          <label class="flex items-center gap-2 text-xs text-ems-ink"><input type="radio" name="format" value="xlsx"> Excel (.xlsx)</label>
+          <label class="flex items-center gap-2 text-xs text-ems-ink"><input type="radio" name="format" value="pdf"> PDF (.pdf)</label>
+        </div>
+        <div class="flex justify-end gap-2 mt-5 pt-3 border-t border-ems-line/50">
+          <button type="button" onclick="document.getElementById('exportModal').classList.add('hidden')" class="px-3 py-1.5 text-xs text-ems-ink border border-ems-line rounded hover:bg-[#F7F8F6]">Batal</button>
+          <button type="submit" onclick="document.getElementById('exportModal').classList.add('hidden')" class="px-3 py-1.5 text-xs text-white bg-graphite-950 rounded hover:bg-graphite-800">Unduh</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    document.getElementById('btnExport').addEventListener('click', function () {
+      document.getElementById('exportModal').classList.remove('hidden');
+    });
+  </script>
 </div>

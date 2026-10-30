@@ -10,6 +10,9 @@
       <span class="hidden shrink-0 font-medium text-ems-muted sm:inline">EMS</span>
       <span class="hidden shrink-0 text-ems-line sm:inline">/</span>
       <span class="truncate font-semibold text-ems-ink"><?= html_escape(isset($title) ? $title : 'EMS') ?></span>
+      <span class="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-gradient-to-r from-ems-amber to-ems-amberdeep hover:bg-ems-amber hover:to-ems-amberdeep transition duration-300 sm:px-3 sm:py-2.5 sm:rounded-lg sm:text-sm sm:font-medium">
+        AOI 5
+      </span>
     </div>
     <?php if (!empty($subtitle)): ?>
       <p class="hidden truncate text-xs text-ems-muted md:block"><?= html_escape($subtitle) ?></p>

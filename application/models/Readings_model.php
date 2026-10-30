@@ -222,16 +222,20 @@ class Readings_model extends CI_Model {
    * Rentang inklusif [from 00:00:00 .. to 23:59:59]; server MySQL = WIB (CP-009).
    * Return: int.
    */
-  public function count_range($from, $to)
+  public function count_range($from, $to, $panel_id = 0)
   {
-    $sql = "SELECT COUNT(*) AS n"
-      . " FROM `data_electricity_iot5`"
-      . " WHERE `recorded_at` >= ?"
-      . "   AND `recorded_at` <= ?";
-    $row = $this->db->query($sql, array(
+    $bind = array(
       (string) $from . ' 00:00:00',
       (string) $to . ' 23:59:59',
-    ))->row_array();
+    );
+    $sql = "SELECT COUNT(*) AS n FROM `data_electricity_iot5` `r`"
+      . " JOIN `electricity_panel_iot5` `p` ON `p`.`id` = `r`.`panel_id`"
+      . " WHERE `r`.`recorded_at` >= ? AND `r`.`recorded_at` <= ?";
+    if ($panel_id > 0) {
+      $sql .= " AND `r`.`panel_id` = ?";
+      $bind[] = (int) $panel_id;
+    }
+    $row = $this->db->query($sql, $bind)->row_array();
     return ($row === NULL || !isset($row['n'])) ? 0 : (int) $row['n'];
   }
 
@@ -244,8 +248,12 @@ class Readings_model extends CI_Model {
    * LIMIT/OFFSET inline (int)-cast: mysqli native prepare menolak string
    * utk LIMIT; nilai dari kontroller internal, bukan user raw.
    */
-  public function range_page($from, $to, $per, $offset)
+  public function range_page($from, $to, $per, $offset, $panel_id = 0)
   {
+    $bind = array(
+      (string) $from . ' 00:00:00',
+      (string) $to . ' 23:59:59',
+    );
     $sql = "SELECT"
       . " DATE_FORMAT(`r`.`recorded_at`, '%Y-%m-%d %H:%i') AS `time`,"
       . " `p`.`name` AS `panel`,"
@@ -254,13 +262,43 @@ class Readings_model extends CI_Model {
       . " FROM `data_electricity_iot5` `r`"
       . " JOIN `electricity_panel_iot5` `p` ON `p`.`id` = `r`.`panel_id`"
       . " WHERE `r`.`recorded_at` >= ?"
-      . "   AND `r`.`recorded_at` <= ?"
-      . " ORDER BY `r`.`recorded_at` ASC, `r`.`id` ASC"
+      . "   AND `r`.`recorded_at` <= ?";
+    if ($panel_id > 0) {
+      $sql .= " AND `r`.`panel_id` = ?";
+      $bind[] = (int) $panel_id;
+    }
+    $sql .= " ORDER BY `r`.`recorded_at` DESC, `r`.`id` DESC"
       . " LIMIT " . (int) $per . " OFFSET " . (int) $offset;
-    return $this->db->query($sql, array(
+    return $this->db->query($sql, $bind)->result_array();
+  }
+
+  /**
+   * Semua baris dalam rentang tanggal untuk export (tanpa pagination).
+   * Guard jumlah baris agar server tidak over-load (performa & keamanan).
+   * Kontrak kolom sama dengan range_page: time, panel, + 12 metrik.
+   */
+  public function range_all($from, $to, $panel_id = 0, $max_rows = 200000)
+  {
+    $bind = array(
       (string) $from . ' 00:00:00',
       (string) $to . ' 23:59:59',
-    ))->result_array();
+    );
+    $sql = "SELECT"
+      . " DATE_FORMAT(`r`.`recorded_at`, '%Y-%m-%d %H:%i') AS `time`,"
+      . " `p`.`name` AS `panel`,"
+      . " `r`.`v_r`, `r`.`v_s`, `r`.`v_t`, `r`.`v_rs`, `r`.`v_st`, `r`.`v_rt`,"
+      . " `r`.`i_r`, `r`.`i_s`, `r`.`i_t`, `r`.`pf`, `r`.`kw`, `r`.`kwh`"
+      . " FROM `data_electricity_iot5` `r`"
+      . " JOIN `electricity_panel_iot5` `p` ON `p`.`id` = `r`.`panel_id`"
+      . " WHERE `r`.`recorded_at` >= ?"
+      . "   AND `r`.`recorded_at` <= ?";
+    if ($panel_id > 0) {
+      $sql .= " AND `r`.`panel_id` = ?";
+      $bind[] = (int) $panel_id;
+    }
+    $sql .= " ORDER BY `r`.`recorded_at` DESC, `r`.`id` DESC"
+      . " LIMIT " . (int) $max_rows;
+    return $this->db->query($sql, $bind)->result_array();
   }
 
   /**

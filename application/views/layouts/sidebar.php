@@ -59,17 +59,4 @@ function ems_nav_class($key, $active) {
     </div>
   </nav>
 
-  <div class="mt-auto flex flex-col gap-3">
-    <div class="h-px bg-[#262C33]" role="separator"></div>
-    <div class="flex items-center gap-3 rounded-lg px-2 py-1">
-      <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-graphite-700 text-xs font-bold text-white">AD</div>
-      <div class="flex min-w-0 flex-col">
-        <span class="truncate text-sm font-semibold">Admin</span>
-        <span class="truncate text-xs text-[#9AA1AD]">Administrator</span>
-      </div>
-      <span class="ml-auto flex items-center gap-1.5 rounded-full bg-ems-ambersoft px-2 py-1 text-[11px] font-semibold text-ems-amberdeep">
-        <span class="size-1.5 rounded-full bg-ems-amber"></span>Live
-      </span>
-    </div>
-  </div>
 </aside>
