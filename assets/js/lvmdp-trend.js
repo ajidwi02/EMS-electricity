@@ -18,6 +18,7 @@
   var SERIES = { ln: ['R', 'S', 'T'], ll: ['R', 'S', 'T'], a: ['R', 'S', 'T'], ph: ['K'] };
   var UNITS = { ln: 'V', ll: 'V', a: 'A', ph: 'kW' };
   var DEC = { ln: 2, ll: 2, a: 0, ph: 2 };
+  var LETTERS = { R: 'R', S: 'S', T: 'T', K: '' };   /* FASE-H CP-064: huruf seri di tooltip (selaras legend R/S/T kartu); K = tanpa label */
   var ST_DEC = { ln: 1, ll: 1, a: 0, ph: 1 };
   var REFRESH_MS = 60000;
 
@@ -225,7 +226,39 @@
 
   function paintAll() { ['ln', 'll', 'a', 'ph'].forEach(function (k) { paint(k); }); }
 
-  /* ---- hover ---- */
+  /* ---- hover (FASE-H, CP-064): transisi halus pola tarif7 (is-shown) +
+     huruf seri + ring dot emfasis + highlight label sumbu-x +
+     snap-through-refresh 60 s + inspeksi sentuh. Kontrak data BEKU (CP-042). ---- */
+  var hoverState = { key: null, men: -1 };
+
+  function clearXLabel(key) {
+    var rowEl = root.querySelector('[data-xrow="' + key + '"]');
+    if (!rowEl) return;
+    Array.prototype.forEach.call(rowEl.querySelectorAll('[data-xlbl].is-active'), function (e) {
+      e.classList.remove('is-active');
+    });
+  }
+
+  function markXLabel(key, men) {
+    var rowEl = root.querySelector('[data-xrow="' + key + '"]');
+    if (!rowEl) return;
+    var want = String(Math.max(0, Math.min(1440, Math.round(men / 180) * 180)));
+    Array.prototype.forEach.call(rowEl.querySelectorAll('[data-xlbl]'), function (e) {
+      if (e.getAttribute('data-xlbl') === want) { e.classList.add('is-active'); }
+      else { e.classList.remove('is-active'); }
+    });
+  }
+
+  /* menit tercatat terdekat dari daftar ANGKA menit (nearestIdx di atas khusus
+     array pair [men, nilai]; baseline keliru memakai nearestIdx utk menList). */
+  function nearestMen(list, target) {
+    var lo = 0, hi = list.length - 1, mid;
+    if (!list.length) return -1;
+    while (lo < hi) { mid = (lo + hi) >> 1; if (list[mid] < target) lo = mid + 1; else hi = mid; }
+    if (lo > 0 && list[lo] - target >= target - list[lo - 1]) lo = lo - 1;
+    return list[lo];
+  }
+
   function showHover(key, men) {
     var c = ch(key);
     var box = root.querySelector('[data-trend="' + key + '"]');
@@ -233,13 +266,19 @@
     var hc = box.querySelector('[data-hx]');
     var tip = box.querySelector('[data-tip]');
     var sc = c.scale;
+    var keys = SERIES[key];
     var loc = men / 1440 * 100;
+
+    hoverState.key = key;
+    hoverState.men = men;
 
     if (hc) {
       hc.classList.remove('hidden');
+      hc.classList.add('is-shown');
       hc.style.left = loc + '%';
     }
-    var keys = SERIES[key];
+    markXLabel(key, men);
+
     if (tip) {
       while (tip.firstChild) tip.removeChild(tip.firstChild);
       var head = document.createElement('span');
@@ -247,90 +286,118 @@
       head.textContent = menLbl(men);
       tip.appendChild(head);
     }
+
     for (var i = 0; i < keys.length; i++) {
       var sk = keys[i];
       var dotEl = box.querySelector('[data-dot="' + sk + '"]');
-      var v = null, pts = c.series[sk].pts;
+      var pts = c.series[sk].pts;
       var idx = nearestIdx(pts, men);
-      if (idx >= 0 && pts[idx][0] === men) v = pts[idx][1];
+      var v = (idx >= 0 && pts[idx][0] === men) ? pts[idx][1] : null;
+
       if (dotEl && v !== null) {
         dotEl.classList.remove('hidden');
+        dotEl.classList.add('is-active');
         dotEl.style.left = (pts[idx][0] / 1440 * 100) + '%';
         dotEl.style.top = ((1 - (v - sc.ymin) / (sc.ymax - sc.ymin)) * 100) + '%';
       } else if (dotEl) {
         dotEl.classList.add('hidden');
+        dotEl.classList.remove('is-active');
       }
+
       if (tip) {
         var row = document.createElement('div');
         row.className = 'flex items-center gap-1.5';
+        if (LETTERS[sk]) {
+          var dlbl = document.createElement('span');
+          dlbl.className = 'w-3 shrink-0 font-medium text-ems-muted';
+          dlbl.textContent = LETTERS[sk];
+          row.appendChild(dlbl);
+        }
         var ddot = document.createElement('span');
         ddot.className = 'size-2 shrink-0 rounded-full';
         ddot.style.background = (sk === 'R') ? '#E53935' : (sk === 'S') ? '#F9A825' : '#191C1F';
-        var dval = document.createElement('span');
-        dval.className = 'font-medium';
-        dval.textContent = (v === null ? '—' : Number(v).toFixed(DEC[key])) + ' ' + UNITS[key];
         row.appendChild(ddot);
+        var dval = document.createElement('span');
+        dval.className = 'font-medium ml-auto';
+        dval.textContent = (v === null ? '—' : Number(v).toFixed(DEC[key])) + ' ' + UNITS[key];
         row.appendChild(dval);
         tip.appendChild(row);
       }
     }
+
     if (tip) {
       tip.classList.remove('hidden');
       tip.style.top = '6px';
-      var lef = Math.min(Math.max(loc, 10), 90);
-      tip.style.left = lef + '%';
-      tip.style.transform = 'translateX(-50%)';
+      tip.style.left = Math.min(Math.max(loc, 10), 90) + '%';
+      /* TRANSISI DIPEGANG CSS (state kelas) — dilarang menulis inline transform di JS */
+      requestAnimationFrame(function () { tip.classList.add('is-shown'); });
     }
   }
 
   function hideHover(key) {
     var box = root.querySelector('[data-trend="' + key + '"]');
     if (!box) return;
-    ['[data-hx]', '[data-tip]'].forEach(function (q) {
-      var e = box.querySelector(q);
-      if (e) e.classList.add('hidden');
-    });
+    hoverState.key = null;
+    hoverState.men = -1;
+    var hc = box.querySelector('[data-hx]');
+    if (hc) { hc.classList.add('hidden'); hc.classList.remove('is-shown'); }
+    clearXLabel(key);
     Array.prototype.forEach.call(box.querySelectorAll('[data-dot]'), function (e) {
       e.classList.add('hidden');
+      e.classList.remove('is-active');
     });
+    var tip = box.querySelector('[data-tip]');
+    if (tip) {
+      tip.classList.remove('is-shown');   /* fade-out murni via CSS */
+      setTimeout(function () {
+        if (!tip.classList.contains('is-shown')) tip.classList.add('hidden');
+      }, 200);
+    }
   }
 
   Object.keys(SERIES).forEach(function (key) {
     var box = root.querySelector('[data-trend="' + key + '"]');
     if (!box) return;
-    var lastMen = -1;
     function onMove(ev) {
       var menList = allMenit(key);
       if (!menList.length) return;
       var rect = box.getBoundingClientRect();
       var f = ((ev.clientX - rect.left) / rect.width);
       f = Math.max(0, Math.min(1, f));
-      var men = menList[nearestIdx(menList, Math.round(f * 1440))];
-      lastMen = men;
-      showHover(key, men);
+      showHover(key, nearestMen(menList, Math.round(f * 1440)));
     }
     box.addEventListener('pointermove', onMove);
-    box.addEventListener('pointerleave', function () { hideHover(key); });
+    box.addEventListener('pointerdown', function (ev) {
+      if (ev.pointerType === 'mouse') return;   /* mouse: pointermove sudah cukup */
+      onMove(ev);                               /* sentuh/pen: tekan = inspeksi (D7) */
+    });
+    box.addEventListener('pointerup', function (ev) {
+      if (ev.pointerType !== 'mouse') hideHover(key);   /* lepas = tutup */
+    });
+    ['pointercancel', 'pointerleave'].forEach(function (t) {
+      box.addEventListener(t, function () { hideHover(key); });
+    });
     box.addEventListener('focusout', function () { hideHover(key); });
     box.addEventListener('keydown', function (ev) {
       var menList = allMenit(key);
       if (!menList.length) { return; }
-      var step = 5, now = lastMen;
-      if (now === -1) now = menList[0];
-      if (ev.key === 'ArrowRight') now += step;
-      else if (ev.key === 'ArrowLeft') now -= step;
-      else if (ev.key === 'Home') now = menList[0];
-      else if (ev.key === 'End') now = menList[menList.length - 1];
+      var lo = menList[0], hi = menList[menList.length - 1];
+      var now = (hoverState.key === key) ? hoverState.men : -1;
+      if (now === -1) now = lo;
+      if (ev.key === 'ArrowRight') now += 5;
+      else if (ev.key === 'ArrowLeft') now -= 5;
+      else if (ev.key === 'Home') now = lo;
+      else if (ev.key === 'End') now = hi;
       else if (ev.key === 'Escape') { hideHover(key); ev.preventDefault(); return; }
       else return;
       ev.preventDefault();
-      var fin = menList[nearestIdx(menList, Math.max(menList[0], Math.min(menList[menList.length - 1], now)))];
-      lastMen = fin;
-      showHover(key, fin);
+      now = Math.max(lo, Math.min(hi, now));
+      showHover(key, nearestMen(menList, now));
     });
   });
 
-  /* refresh 60 s */
+  /* refresh 60 s (CP-046) — FASE-H D6: state hover DIPERTAHANKAN;
+     setelah repaint, re-snap ke menit tercatat terdekat; data hilang -> tutup. */
   function tick() {
     if (document.hidden) return;
     var xhr;
@@ -341,6 +408,17 @@
       try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
       srcEl.textContent = xhr.responseText;
       paintAll();
+      if (hoverState.key !== null) {
+        var menList = allMenit(hoverState.key);
+        if (menList.length) {
+          var last = hoverState.men;
+          last = Math.max(menList[0], Math.min(menList[menList.length - 1],
+            (last === -1) ? menList[0] : last));
+          showHover(hoverState.key, nearestMen(menList, last));
+        } else {
+          hideHover(hoverState.key);
+        }
+      }
     };
     xhr.send();
   }

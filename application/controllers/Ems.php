@@ -151,12 +151,12 @@ class Ems extends CI_Controller {
     // FASE-T (CP-062; plans/ems-tarif-per-panel-puma-nagai.md): peta SATU titik
     // key → code (kode DB = group topik, tanpa peta topik kedua).
     $pages = array(
-      'lvmdp' => array('view' => 'lvmdp', 'nav' => 'lvmdp', 'title' => 'LVMDP', 'code' => 'lvmdp',
-        'subtitle' => 'Monitoring Low Voltage Main Distribution Panel'),
-      'puma'  => array('view' => 'puma', 'nav' => 'puma', 'title' => 'Puma', 'code' => 'lvmdp2',
-        'subtitle' => 'Monitoring panel / area Puma'),
-      'nagai' => array('view' => 'nagai', 'nav' => 'nagai', 'title' => 'Nagai', 'code' => 'lvmdp3',
-        'subtitle' => 'Monitoring panel / area Nagai'),
+      'lvmdp' => array('view' => 'lvmdp', 'nav' => 'lvmdp', 'title' => 'Panel 1', 'code' => 'lvmdp',
+        'subtitle' => 'Monitoring Panel 1'),
+      'puma'  => array('view' => 'puma', 'nav' => 'puma', 'title' => 'Panel 2', 'code' => 'lvmdp2',
+        'subtitle' => 'Monitoring Panel 2'),
+      'nagai' => array('view' => 'nagai', 'nav' => 'nagai', 'title' => 'Panel 3', 'code' => 'lvmdp3',
+        'subtitle' => 'Monitoring Panel 3'),
     );
     if (!isset($pages[$key])) {
       $key = 'lvmdp';

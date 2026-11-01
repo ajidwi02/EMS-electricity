@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= isset($title) ? html_escape($title).' — EMS' : 'EMS — Energy Management System' ?></title>
   <meta name="description" content="EMS — Energy Management System dashboard admin. Minimalist, modern, elegan untuk lingkungan industri.">
+  <link rel="icon" type="image/x-icon" href="<?= base_url('assets/img/smart-energy.ico') ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

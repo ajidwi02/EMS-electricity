@@ -446,7 +446,7 @@ $tarif_num = function ($v, $dec) {
           <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= (int) $yv ?></span>
           <?php endfor; ?>
         </div>
-        <div class="relative min-w-0 flex-1 cursor-crosshair rounded-md <?= $plot_h ?> outline-offset-2 focus-visible:outline-2 focus-visible:outline-ems-amber" tabindex="0" role="img" data-trend="<?= html_escape($tkey) ?>" aria-label="<?= html_escape($t_c['title']) ?> hari ini WIB, dari pencatatan DB 00:00–24:00">
+        <div class="relative min-w-0 flex-1 cursor-crosshair rounded-md <?= $plot_h ?> outline-offset-2 focus-visible:outline-2 focus-visible:outline-ems-amber" tabindex="0" role="img" data-trend="<?= html_escape($tkey) ?>" aria-label="<?= html_escape($t_c['title']) ?> hari ini WIB, dari pencatatan DB 00:00–24:00. Arahkan kursor / ketuk untuk detail">
           <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
             <rect x="600" y="0" width="133.33" height="300" fill="rgba(234,165,0,0.10)" />
             <g data-deco>
@@ -484,8 +484,8 @@ $tarif_num = function ($v, $dec) {
 
       <div class="mt-1 flex">
         <div class="w-12 shrink-0"></div>
-        <div class="flex min-w-0 flex-1 justify-between px-px text-[10px] tabular-nums text-ems-muted">
-          <span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span><span>24:00</span>
+        <div data-xrow="<?= html_escape($tkey) ?>" class="flex min-w-0 flex-1 justify-between px-px text-[10px] tabular-nums text-ems-muted">
+          <span data-xlbl="0">00:00</span><span data-xlbl="180">03:00</span><span data-xlbl="360">06:00</span><span data-xlbl="540">09:00</span><span data-xlbl="720">12:00</span><span data-xlbl="900">15:00</span><span data-xlbl="1080">18:00</span><span data-xlbl="1260">21:00</span><span data-xlbl="1440">24:00</span>
         </div>
       </div>
     </div>
@@ -523,7 +523,7 @@ $tarif_num = function ($v, $dec) {
           <span class="absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-ems-muted" style="top:<?= sprintf('%.2F%%', $frac * 100) ?>"><?= (int) $yv ?></span>
           <?php endfor; ?>
         </div>
-        <div class="relative min-w-0 flex-1 cursor-crosshair rounded-md h-40 sm:h-52 lg:h-60 outline-offset-2 focus-visible:outline-2 focus-visible:outline-ems-amber" tabindex="0" role="img" data-trend="ph" aria-label="Daya aktif (kW) hari ini WIB, dari pencatatan DB 00:00–24:00">
+        <div class="relative min-w-0 flex-1 cursor-crosshair rounded-md h-40 sm:h-52 lg:h-60 outline-offset-2 focus-visible:outline-2 focus-visible:outline-ems-amber" tabindex="0" role="img" data-trend="ph" aria-label="Daya aktif (kW) hari ini WIB, dari pencatatan DB 00:00–24:00. Arahkan kursor / ketuk untuk detail">
           <svg class="block size-full" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
             <rect x="600" y="0" width="133.33" height="300" fill="rgba(234,165,0,0.10)" />
             <g data-deco>
@@ -544,8 +544,8 @@ $tarif_num = function ($v, $dec) {
 
       <div class="mt-1 flex">
         <div class="w-12 shrink-0"></div>
-        <div class="flex min-w-0 flex-1 justify-between px-px text-[10px] tabular-nums text-ems-muted">
-          <span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span><span>24:00</span>
+        <div data-xrow="ph" class="flex min-w-0 flex-1 justify-between px-px text-[10px] tabular-nums text-ems-muted">
+          <span data-xlbl="0">00:00</span><span data-xlbl="180">03:00</span><span data-xlbl="360">06:00</span><span data-xlbl="540">09:00</span><span data-xlbl="720">12:00</span><span data-xlbl="900">15:00</span><span data-xlbl="1080">18:00</span><span data-xlbl="1260">21:00</span><span data-xlbl="1440">24:00</span>
         </div>
       </div>
 
