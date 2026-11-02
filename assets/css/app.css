@@ -212,6 +212,47 @@ body {
 [data-xlbl] { transition: color 0.18s ease; }
 [data-xlbl].is-active { color: var(--ems-ink); }   /* warna SAJA: font-weight akan menggeser baris justify-between (reflow) */
 
+/* ==========================================================================
+   Dashboard D-T: busbar distribution ring — distribusi tarif hari ini per
+   panel. Warna HANYA token yang sudah ada (GR-06); transisi 0.18 s (GR-08).
+   ========================================================================== */
+#tarifdist .tarifdist-track {
+  fill: none;
+  stroke: var(--ems-line);
+  stroke-width: 22;
+}
+
+#tarifdist .tarifdist-seg {
+  fill: none;
+  stroke-width: 22;
+  stroke-linecap: butt;
+  pointer-events: stroke;
+  cursor: pointer;
+  transition: stroke-width 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.18s ease;
+}
+
+#tarifdist .tarifdist-seg--p1 { stroke: var(--ems-amber); }
+#tarifdist .tarifdist-seg--p2 { stroke: var(--ems-steel-400); }
+#tarifdist .tarifdist-seg--p3 { stroke: var(--ems-graphite-800); }
+
+#tarifdist.is-hovering .tarifdist-seg { opacity: 0.28; }
+#tarifdist.is-hovering .tarifdist-seg.is-active {
+  opacity: 1;
+  stroke-width: 26;
+}
+
+#tarifdist .tarifdist-swatch--p1 { background: var(--ems-amber); }
+#tarifdist .tarifdist-swatch--p2 { background: var(--ems-steel-400); }
+#tarifdist .tarifdist-swatch--p3 { background: var(--ems-graphite-800); }
+
+#tarifdist .tarifdist-row {
+  transition: background-color 0.18s ease;
+}
+#tarifdist .tarifdist-row.is-active {
+  background-color: var(--ems-bg);
+}
+
 /* Hormati pengguna yang menonaktifkan animasi */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -225,5 +266,7 @@ body {
   }
   #sidebar, #overlay { transition: none; }
   .tarif7-bar, #tarif7-tip, #tarif7-hx,
-  [data-hx], [data-tip], [data-dot], [data-xlbl] { transition: none; }
+  [data-hx], [data-tip], [data-dot], [data-xlbl],
+  #tarifdist .tarifdist-seg,
+  #tarifdist .tarifdist-row { transition: none; }
 }

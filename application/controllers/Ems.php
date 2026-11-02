@@ -113,7 +113,8 @@ class Ems extends CI_Controller {
     $this->render('dashboard', 'dashboard', 'Dashboard', 'Ringkasan konsumsi & status sistem', array(
       'panel_rows' => $panel_rows,
       'chart_name' => $chart_name,
-      'chart'      => $buckets,
+      'chart'       => $buckets,
+      'tarif_panel' => $this->dashboard_tarif_panel(),
       'kpi'        => array(
         'kwh_today' => $has_data ? $kwh : NULL,
         'peak_kw'   => $has_data ? $peak : NULL,
@@ -122,6 +123,83 @@ class Ems extends CI_Controller {
         'panels_n'  => count($panels),
       ),
     ));
+  }
+
+  /**
+   * D-T: distribusi total tarif HARI INI per panel (Panel 1/2/3) untuk
+   * donut chart dashboard. Sumber: kWh per blok TOU hari ini (WIB) x tarif
+   * aktif. TANPA dummy — bila tidak ada data/config, total = NULL.
+   */
+  private function dashboard_tarif_panel()
+  {
+    $this->load->model('Readings_model');
+    $tz    = new DateTimeZone('Asia/Jakarta');
+    $today = new DateTime('today', $tz);
+    $date  = $today->format('Y-m-d');
+    $bulan = array(1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                   7 => 'Jul', 8 => 'Agt', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des');
+    $date_lbl = $today->format('j') . ' ' . $bulan[(int) $today->format('n')] . ' ' . $today->format('Y');
+
+    $defs = array(
+      array('code' => 'lvmdp',  'name' => 'Panel 1'),
+      array('code' => 'lvmdp2', 'name' => 'Panel 2'),
+      array('code' => 'lvmdp3', 'name' => 'Panel 3'),
+    );
+
+    $config = $this->Readings_model->get_tariff_config();
+    $tou    = array();
+    if ($config !== NULL) {
+      $tou = array(
+        'wbp'   => array((int) substr($config['wbp_start'], 0, 2),   (int) substr($config['wbp_end'], 0, 2)),
+        'lwbp1' => array((int) substr($config['lwbp1_start'], 0, 2), (int) substr($config['lwbp1_end'], 0, 2)),
+        'lwbp2' => array((int) substr($config['lwbp2_start'], 0, 2), (int) substr($config['lwbp2_end'], 0, 2)),
+      );
+    }
+
+    $panels = array();
+    $total  = 0;
+    $n_data = 0;
+
+    foreach ($defs as $d) {
+      $row = array(
+        'code'     => $d['code'],
+        'name'     => $d['name'],
+        'kwh'      => NULL,
+        'rp'       => NULL,
+        'pct'      => NULL,
+        'has_data' => FALSE,
+      );
+
+      if ($config !== NULL) {
+        $pid = $this->Readings_model->panel_id_by_code($d['code']);
+        if ($pid !== NULL) {
+          $kwh = $this->Readings_model->kwh_by_tou_block($pid, $date, $tou);
+          if (!empty($kwh['has_data'])) {
+            $biaya = $this->tarif_calculator($kwh, $config);
+            $row['kwh']      = (float) $kwh['total'];
+            $row['rp']       = (int) $biaya['biaya_total'];
+            $row['has_data'] = TRUE;
+            $total += $row['rp'];
+            $n_data++;
+          }
+        }
+      }
+      $panels[] = $row;
+    }
+
+    foreach ($panels as $i => $row) {
+      if ($row['has_data'] && $total > 0) {
+        $panels[$i]['pct'] = ($row['rp'] / $total) * 100.0;
+      }
+    }
+
+    return array(
+      'date'     => $date_lbl,
+      'total'    => ($n_data > 0) ? $total : NULL,
+      'panels_n' => $n_data,
+      'panels'   => $panels,
+      'src'      => ($n_data > 0) ? 'db' : 'none',
+    );
   }
 
   // Panel 1/2/3 (LVMDP/Puma/Nagai) — SATU logika dashboard (CP-055; spec
