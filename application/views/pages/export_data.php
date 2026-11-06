@@ -7,6 +7,14 @@ if (!function_exists('ems_num')) {
   }
 }
 
+if (!function_exists('ems_rp')) {
+  // CP-073: satu baris = satu panel per hari; rupiah id-ID; tanpa "Rp" (sudah di label kolom).
+  function ems_rp($v)
+  {
+    return ($v === NULL || $v === '') ? NULL : number_format((float) $v, 0, ',', '.');
+  }
+}
+
 $fmtColTime = function ($s) {
   $tz = new DateTimeZone('Asia/Jakarta');
   $dt = DateTime::createFromFormat('Y-m-d H:i', (string) $s, $tz);
@@ -53,9 +61,11 @@ $pg_url = function ($n) use ($fq) {
   return site_url('export-data') . '?' . http_build_query($q);
 };
 
-// Tombol Export — buka modal pemilihan format (CSV / XLSX / PDF), data diunduh ke komputer lokal
-$action = '<button type="button" id="btnExport" title="Unduh data" class="flex items-center gap-2 rounded-lg bg-graphite-950 px-4 py-2 text-sm font-medium text-white hover:bg-graphite-800"><i data-lucide="download" data-icon="inline-start" class="size-4"></i>Export</button>';
-$this->load->view('partials/page_header', array('title' => $title, 'subtitle' => $subtitle, 'action' => $action));
+// CP-075: tombol Export DIPINDAH dari topbar ke dalam kartu tabel Log Data
+// (header kartu, kiri teks "Menampilkan…") — akses lebih dekat ke datanya.
+// Page header kini dipanggil TANPA 'action' untuk kedua tab.
+$tab = (isset($tab) && $tab === 'tarif') ? 'tarif' : 'log';
+$this->load->view('partials/page_header', array('title' => $title, 'subtitle' => $subtitle));
 
 // --- Pagination list (algoritma deterministik CP-013, tetap) --------------
 $pg_list = array();
@@ -80,6 +90,13 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
   : 'Tidak ada pembacaan pada periode ini — pastikan worker pembacaan berjalan untuk merekam data baru.';
 ?>
 <div class="flex flex-col gap-6">
+  <!-- CP-073: sub menu halaman Export Data (segmented; default Log Data) -->
+  <nav aria-label="Sub menu export data" role="group" class="inline-flex flex-wrap items-center gap-0.5 self-start rounded-lg border border-ems-line bg-white p-1">
+    <a href="<?= site_url('export-data') ?>" class="inline-flex h-8 items-center rounded-md px-4 text-sm font-medium <?= ($tab === 'log') ? 'bg-graphite-950 text-white' : 'text-ems-ink hover:bg-[#F7F8F6]' ?>" <?= ($tab === 'log') ? 'aria-current="page"' : '' ?>>Log Data</a>
+    <a href="<?= site_url('export-data?tab=tarif') ?>" class="inline-flex h-8 items-center rounded-md px-4 text-sm font-medium <?= ($tab === 'tarif') ? 'bg-graphite-950 text-white' : 'text-ems-ink hover:bg-[#F7F8F6]' ?>" <?= ($tab === 'tarif') ? 'aria-current="page"' : '' ?>>Tarif Konsumsi</a>
+  </nav>
+
+  <?php if ($tab === 'log'): ?>
   <!-- Kartu tabel historis -->
   <div class="rounded-lg border border-ems-line bg-white">
     <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:items-center md:px-6">
@@ -98,10 +115,14 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
         <a href="<?= site_url('export-data?filter=' . urlencode($filter_key) . '&panel=' . urlencode('Panel 2') . $date_qs) ?>" class="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium <?= ($pf === 'Panel 2') ? 'bg-graphite-950 text-white' : 'bg-white text-ems-ink border border-ems-line hover:bg-[#F7F8F6]' ?>">Panel 2</a>
         <a href="<?= site_url('export-data?filter=' . urlencode($filter_key) . '&panel=' . urlencode('Panel 3') . $date_qs) ?>" class="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium <?= ($pf === 'Panel 3') ? 'bg-graphite-950 text-white' : 'bg-white text-ems-ink border border-ems-line hover:bg-[#F7F8F6]' ?>">Panel 3</a>
       </div>
-      <span class="ml-auto shrink-0 text-xs tabular-nums text-ems-muted">
-        Menampilkan <span class="font-semibold text-ems-ink"><?= (int) $floor_num ?>–<?= (int) $top_num ?></span>
-        dari <span class="font-semibold text-ems-ink"><?= (int) $total ?></span> baris
-      </span>
+      <!-- CP-075: kawasan kanan header kartu — tombol Export (kiri) + penghitung baris (kanan) -->
+      <div class="flex flex-wrap items-center gap-3 sm:ml-auto">
+        <button type="button" id="btnExport" title="Unduh data" class="flex items-center gap-2 rounded-lg bg-graphite-950 px-4 py-2 text-sm font-medium text-white hover:bg-graphite-800"><i data-lucide="download" data-icon="inline-start" class="size-4"></i>Export</button>
+        <span class="shrink-0 text-xs tabular-nums text-ems-muted">
+          Menampilkan <span class="font-semibold text-ems-ink"><?= (int) $floor_num ?>–<?= (int) $top_num ?></span>
+          dari <span class="font-semibold text-ems-ink"><?= (int) $total ?></span> baris
+        </span>
+      </div>
     </div>
 
     <!-- Toolbar filter periode (fase 4a-2) -->
@@ -216,7 +237,60 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
       </nav>
     </div>
   </div>
+  <?php else: ?>
+  <!-- CP-073: kartu "Tarif Konsumsi" — tabel polos sementara (tanpa filter & tanpa Export) -->
+  <div class="rounded-lg border border-ems-line bg-white">
+    <div class="flex flex-col gap-1 border-b border-ems-line px-4 py-3 md:px-6">
+      <h2 class="truncate text-sm font-semibold">Tarif Konsumsi</h2>
+      <p class="truncate text-xs text-ems-muted">Rekap harian biaya konsumsi listrik per panel (WIB)</p>
+    </div>
 
+    <?php if (empty($tarif_rows)): ?>
+      <?php $this->load->view('partials/empty_state', array(
+        'icon'  => 'wallet',
+        'title' => 'Belum ada rekap tarif konsumsi',
+        'desc'  => 'Rekap harian terisi otomatis oleh pencatatan harian — satu baris per panel per hari (WIB) begitu datanya ada.',
+      )); ?>
+    <?php else: ?>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[880px] text-sm" role="table">
+          <thead class="bg-[#EFF0ED]">
+            <tr class="border-b border-ems-line">
+              <th class="px-3 py-2.5 text-left font-semibold"><span class="block">Tanggal</span><span class="block text-[11px] font-normal text-ems-muted">WIB</span></th>
+              <th class="px-3 py-2.5 text-left font-semibold"><span class="block">Lokasi</span><span class="block text-[11px] font-normal text-ems-muted">panel</span></th>
+              <th class="px-3 py-2.5 text-right font-semibold"><span class="block">LWBP</span><span class="block text-[11px] font-normal text-ems-muted">KWh</span></th>
+              <th class="px-3 py-2.5 text-right font-semibold"><span class="block">WBP</span><span class="block text-[11px] font-normal text-ems-muted">KWh</span></th>
+              <th class="px-3 py-2.5 text-right font-semibold"><span class="block">Tarif LWBP</span><span class="block text-[11px] font-normal text-ems-muted">Rp</span></th>
+              <th class="px-3 py-2.5 text-right font-semibold"><span class="block">Tarif WBP</span><span class="block text-[11px] font-normal text-ems-muted">Rp</span></th>
+              <th class="px-3 py-2.5 text-right font-semibold"><span class="block">Total Tarif</span><span class="block text-[11px] font-normal text-ems-muted">Rp</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($tarif_rows as $row): ?>
+            <tr class="border-b border-ems-line/70 last:border-0 hover:bg-[#F7F8F6]">
+              <td class="whitespace-nowrap px-3 py-2 tabular-nums"><?= $fmtDate($row['tanggal']) ?><?php if ((int) $row['is_final'] === 0): ?><span class="ml-1.5 inline-flex items-center rounded-full bg-ems-ambersoft px-1.5 py-0.5 text-[10px] font-medium text-ems-amberdeep" title="Hari berjalan — angka masih bisa berubah sampai tengah malam">Estimasi</span><?php endif; ?></td>
+              <td class="whitespace-nowrap px-3 py-2"><?= html_escape($row['panel']) ?></td>
+              <td class="px-3 py-2 text-right tabular-nums"><?= $fmt($row['kwh_lwbp'], 2) ?></td>
+              <td class="px-3 py-2 text-right tabular-nums"><?= $fmt($row['kwh_wbp'], 2) ?></td>
+              <td class="px-3 py-2 text-right tabular-nums"><?= ($row['biaya_lwbp'] === NULL) ? '<span class="text-ems-muted">—</span>' : html_escape(ems_rp($row['biaya_lwbp'])) ?></td>
+              <td class="px-3 py-2 text-right tabular-nums"><?= ($row['biaya_wbp'] === NULL) ? '<span class="text-ems-muted">—</span>' : html_escape(ems_rp($row['biaya_wbp'])) ?></td>
+              <td class="px-3 py-2 text-right font-medium tabular-nums"><?= ($row['biaya_total'] === NULL) ? '<span class="text-ems-muted">—</span>' : html_escape(ems_rp($row['biaya_total'])) ?></td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+
+    <div class="border-t border-ems-line px-4 py-3 md:px-6">
+      <p class="text-xs text-ems-muted">
+        Data dari database <span class="font-semibold text-ems-ink">ems</span> · satu baris = satu panel per hari (WIB)<?= (count($tarif_rows) >= 200) ? ' · menampilkan 200 rekap terbaru' : '' ?>.
+      </p>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($tab === 'log'): ?>
   <!-- Modal pemilihan format export -->
   <div id="exportModal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="absolute inset-0 bg-black/40" onclick="document.getElementById('exportModal').classList.add('hidden')"></div>
@@ -245,4 +319,5 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
       document.getElementById('exportModal').classList.remove('hidden');
     });
   </script>
+  <?php endif; ?>
 </div>

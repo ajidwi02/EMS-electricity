@@ -797,6 +797,15 @@ class Ems extends CI_Controller {
   {
     $allowed = array('today', 'week', 'month', 'prev-month', 'custom');
 
+    // CP-073: sub-menu halaman Export Data. 'log' = tabel Historis Pembacaan
+    // existing (default). 'tarif' = rekap tarif konsumsi harian (ems_tariff_daily)
+    // — sementara TANPA filter & TANPA tombol Export (tabel saja).
+    // Whitelist enum; nilai asing/kosong -> 'log' TANPA warning (pola $filter).
+    $tab = (string) $this->input->get('tab');
+    if (!in_array($tab, array('log', 'tarif'), TRUE)) {
+      $tab = 'log';
+    }
+
     // 1) Filter: whitelist enum; nilai asing/kosong -> 'today' TANPA warning.
     $filter      = (string) $this->input->get('filter');
     $custom_open = FALSE;
@@ -861,7 +870,9 @@ class Ems extends CI_Controller {
       $rows = $this->Readings_model->range_page($from, $to, $per, $offset, $panel_id);
     }
 
-    $this->render('export_data', 'export', 'Export Data', 'Unduh data historis energi', array(
+    // CP-073: subtitle ikut sub-menu aktif + payload tab/tarif_rows (rekap harian).
+    $subtitle = ($tab === 'tarif') ? 'Rekap harian tarif konsumsi listrik per panel' : 'Unduh data historis energi';
+    $this->render('export_data', 'export', 'Export Data', $subtitle, array(
       'rows'           => $rows,
       'total'          => $total,
       'page'           => $page,
@@ -875,6 +886,8 @@ class Ems extends CI_Controller {
       'custom_open'    => $custom_open,
       'custom_warning' => $warning,
       'panel_filter'   => ($panel_raw !== '' && in_array($panel_raw, $valid_panels, TRUE)) ? $panel_raw : '',
+      'tab'            => $tab,
+      'tarif_rows'     => ($tab === 'tarif') ? $this->Readings_model->tariff_daily_latest(200) : array(),
     ));
   }
 

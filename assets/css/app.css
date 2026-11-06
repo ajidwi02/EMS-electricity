@@ -123,10 +123,6 @@ body {
   from { background-position: -400px 0; }
   to   { background-position: 400px 0; }
 }
-@keyframes ems-draw {
-  from { stroke-dashoffset: 600; }
-  to   { stroke-dashoffset: 0; }
-}
 @keyframes ems-blink-soft {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.45; }
@@ -156,14 +152,6 @@ body {
   background-size: 800px 100%;
   animation: ems-shimmer 1.6s linear infinite;
 }
-
-/* Garis chart placeholder menggambar saat masuk */
-.chart-line {
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-}
-.is-visible .chart-line { animation: ems-draw 1.4s ease forwards 0.3s; }
-.is-visible .chart-line.delay-2 { animation-delay: 0.55s; }
 
 /* ==========================================================================
    T-T-H: hover interaktif pada grouped bar chart "Total Tarif Harian"
@@ -260,8 +248,7 @@ body {
   .reveal.is-visible,
   .float-slow,
   .live-dot,
-  .skeleton,
-  .is-visible .chart-line {
+  .skeleton {
     animation: none;
   }
   #sidebar, #overlay { transition: none; }

@@ -444,6 +444,33 @@ class Readings_model extends CI_Model {
   }
 
   /**
+   * CP-073: baris rekap tarif konsumsi harian TERBARU untuk tab "Tarif Konsumsi"
+   * halaman Export Data (sementara TANPA filter & TANPA pagination).
+   * ORDER: tanggal DESC (terbaru di atas), lalu sort_order panel, lalu id —
+   * deterministik pada tanggal sama, aman dijalankan berulang.
+   * LIMIT inline (int): mysqli native prepare menolak `?` untuk LIMIT (pola range_page).
+   *
+   * @param int $limit Batas baris (default 200 ≈ 66 hari untuk 3 panel)
+   * @return array rows: tanggal (Y-m-d), panel (nama tampil), kwh_lwbp, kwh_wbp,
+   *                biaya_lwbp, biaya_wbp, biaya_total (NULL bila blok tanpa data),
+   *                is_final (0=estimasi hari berjalan, 1=final)
+   */
+  public function tariff_daily_latest($limit = 200)
+  {
+    $limit = max(1, (int) $limit);
+    $sql = "SELECT"
+      . " `d`.`tanggal`, `p`.`name` AS `panel`,"
+      . " `d`.`kwh_lwbp`, `d`.`kwh_wbp`,"
+      . " `d`.`biaya_lwbp`, `d`.`biaya_wbp`, `d`.`biaya_total`,"
+      . " `d`.`is_final`"
+      . " FROM `ems_tariff_daily` `d`"
+      . " JOIN `electricity_panel_iot5` `p` ON `p`.`id` = `d`.`panel_id`"
+      . " ORDER BY `d`.`tanggal` DESC, `p`.`sort_order` ASC, `d`.`id` DESC"
+      . " LIMIT " . $limit;
+    return $this->db->query($sql)->result_array();
+  }
+
+  /**
    * Sanitasi metrik: hanya 12 field whitelist; wajib numerik, else NULL (§7.2).
    * NULL = "tidak ada data", bukan 0 (§3.2 readings).
    */
