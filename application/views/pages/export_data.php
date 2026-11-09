@@ -45,15 +45,23 @@ $chips = array(
 
 $range_txt = ($from === $to) ? $fmtDate($from) : $fmtDate($from) . ' – ' . $fmtDate($to);
 
-// prefix query pagination: selalu bawa filter aktif (custom -> bawa rentang; panel -> bawa panel terpilih)
+// CP-075 + CP-0XX: determinasi tab aktif — HARUS DI ATAS $pg_url.
+$tab = (isset($tab) && $tab === 'tarif') ? 'tarif' : 'log';
+
+// prefix query pagination: selalu bawa tab aktif + (di tab log) filter aktif.
+// CP-0XX: tab tarif HANYA membawa `tab=tarif` + `page` (filter periode/panel belum ada).
 $pf = isset($panel_filter) ? $panel_filter : '';
-$fq = array('filter' => $filter_key);
-if ($filter_key === 'custom') {
-  $fq['from'] = $from;
-  $fq['to']   = $to;
-}
-if ($pf !== '') {
-  $fq['panel'] = $pf;
+if ($tab === 'tarif') {
+  $fq = array('tab' => 'tarif');
+} else {
+  $fq = array('filter' => $filter_key);
+  if ($filter_key === 'custom') {
+    $fq['from'] = $from;
+    $fq['to']   = $to;
+  }
+  if ($pf !== '') {
+    $fq['panel'] = $pf;
+  }
 }
 $pg_url = function ($n) use ($fq) {
   $q = $fq;
@@ -64,7 +72,6 @@ $pg_url = function ($n) use ($fq) {
 // CP-075: tombol Export DIPINDAH dari topbar ke dalam kartu tabel Log Data
 // (header kartu, kiri teks "Menampilkan…") — akses lebih dekat ke datanya.
 // Page header kini dipanggil TANPA 'action' untuk kedua tab.
-$tab = (isset($tab) && $tab === 'tarif') ? 'tarif' : 'log';
 $this->load->view('partials/page_header', array('title' => $title, 'subtitle' => $subtitle));
 
 // --- Pagination list (algoritma deterministik CP-013, tetap) --------------
@@ -238,14 +245,26 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
     </div>
   </div>
   <?php else: ?>
-  <!-- CP-073: kartu "Tarif Konsumsi" — tabel polos sementara (tanpa filter & tanpa Export) -->
+  <!-- CP-073/CP-0XX: kartu "Tarif Konsumsi".
+       CATATAN: di dalam kartu ini $rows, $total, $page, $pages, $floor_num, $top_num ialah DATA TAB TARIF
+         (diambil controller saat $tab==='tarif'), BUKAN data Log Data — shape kolomnya beda
+         (log punya 12 metrik, tarif punya 7 kolom rekap). Dua kartu tidak pernah dirender bersamaan,
+         jadi memakai nama variabel sama dengan kartu log aman. -->
   <div class="rounded-lg border border-ems-line bg-white">
-    <div class="flex flex-col gap-1 border-b border-ems-line px-4 py-3 md:px-6">
-      <h2 class="truncate text-sm font-semibold">Tarif Konsumsi</h2>
-      <p class="truncate text-xs text-ems-muted">Rekap harian biaya konsumsi listrik per panel (WIB)</p>
+    <!-- CP-0XX: counter baris di header — copy konsep counter Log Data (tanpa tombol Export).
+         Tetap render saat $rows kosong: "Menampilkan 0–0 dari 0 baris" (paritas Log Data). -->
+    <div class="flex flex-col gap-2 border-b border-ems-line px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 md:px-6">
+      <div class="flex min-w-0 flex-col">
+        <h2 class="truncate text-sm font-semibold">Tarif Konsumsi</h2>
+        <p class="truncate text-xs text-ems-muted">Rekap harian biaya konsumsi listrik per panel (WIB)</p>
+      </div>
+      <div class="ml-auto shrink-0 text-sm tabular-nums text-ems-muted">
+        Menampilkan <span class="font-semibold text-ems-ink"><?= (int) $floor_num ?>–<?= (int) $top_num ?></span>
+        dari <span class="font-semibold text-ems-ink"><?= (int) $total ?></span> baris
+      </div>
     </div>
 
-    <?php if (empty($tarif_rows)): ?>
+    <?php if (empty($rows)): ?>
       <?php $this->load->view('partials/empty_state', array(
         'icon'  => 'wallet',
         'title' => 'Belum ada rekap tarif konsumsi',
@@ -266,7 +285,7 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($tarif_rows as $row): ?>
+            <?php foreach ($rows as $row): ?>
             <tr class="border-b border-ems-line/70 last:border-0 hover:bg-[#F7F8F6]">
               <td class="whitespace-nowrap px-3 py-2 tabular-nums"><?= $fmtDate($row['tanggal']) ?><?php if ((int) $row['is_final'] === 0): ?><span class="ml-1.5 inline-flex items-center rounded-full bg-ems-ambersoft px-1.5 py-0.5 text-[10px] font-medium text-ems-amberdeep" title="Hari berjalan — angka masih bisa berubah sampai tengah malam">Estimasi</span><?php endif; ?></td>
               <td class="whitespace-nowrap px-3 py-2"><?= html_escape($row['panel']) ?></td>
@@ -282,10 +301,37 @@ $empty_desc = ($total === 0 && $filter_key === 'custom')
       </div>
     <?php endif; ?>
 
-    <div class="border-t border-ems-line px-4 py-3 md:px-6">
+    <!-- CP-0XX: strip bawah — format & class IDENTIK dengan strip Log Data (CP-013). -->
+    <div class="flex flex-col gap-3 border-t border-ems-line px-4 py-3 md:flex-row md:items-center md:justify-between md:px-6">
       <p class="text-xs text-ems-muted">
-        Data dari database <span class="font-semibold text-ems-ink">ems</span> · satu baris = satu panel per hari (WIB)<?= (count($tarif_rows) >= 200) ? ' · menampilkan 200 rekap terbaru' : '' ?>.
+        Data dari database <span class="font-semibold text-ems-ink">ems</span> · satu baris = satu panel per hari (WIB) · maksimal <span class="font-semibold text-ems-ink"><?= (int) $per_page ?> baris/halaman</span>.
       </p>
+      <nav class="flex flex-wrap items-center gap-1.5" aria-label="Pagination halaman tarif konsumsi">
+        <!-- tombol prev -->
+        <?php $prev = max(1, $page - 1); if ($page <= 1): ?>
+          <span class="inline-flex h-8 min-w-8 cursor-not-allowed items-center justify-center rounded-lg border border-ems-line/60 bg-white text-ems-muted/60" aria-disabled="true"><i data-lucide="chevron-left" class="size-4"></i></span>
+        <?php else: ?>
+          <a href="<?= html_escape($pg_url($prev)) ?>" class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border border-ems-line bg-white text-ems-ink hover:bg-[#F7F8F6]" aria-label="Halaman sebelumnya"><i data-lucide="chevron-left" class="size-4"></i></a>
+        <?php endif; ?>
+
+        <!-- chip nomor halaman (window 1 / p-1 / p / p+1 / last + pemisah …) -->
+        <?php foreach ($pg_show as $p): ?>
+          <?php if ($p === 'gap'): ?>
+            <span class="inline-flex h-8 min-w-8 items-center justify-center text-ems-muted">…</span>
+          <?php elseif ($p === $page): ?>
+            <span class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-graphite-950 text-sm font-medium text-white" aria-current="page"><?= (int) $p ?></span>
+          <?php else: ?>
+            <a href="<?= html_escape($pg_url($p)) ?>" class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border border-ems-line bg-white text-sm text-ems-ink hover:bg-[#F7F8F6]"><?= (int) $p ?></a>
+          <?php endif; ?>
+        <?php endforeach; ?>
+
+        <!-- tombol next -->
+        <?php $next = min($pages, $page + 1); if ($page >= $pages): ?>
+          <span class="inline-flex h-8 min-w-8 cursor-not-allowed items-center justify-center rounded-lg border border-ems-line/60 bg-white text-ems-muted/60" aria-disabled="true"><i data-lucide="chevron-right" class="size-4"></i></span>
+        <?php else: ?>
+          <a href="<?= html_escape($pg_url($next)) ?>" class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border border-ems-line bg-white text-ems-ink hover:bg-[#F7F8F6]" aria-label="Halaman berikutnya"><i data-lucide="chevron-right" class="size-4"></i></a>
+        <?php endif; ?>
+      </nav>
     </div>
   </div>
   <?php endif; ?>

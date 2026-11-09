@@ -444,20 +444,34 @@ class Readings_model extends CI_Model {
   }
 
   /**
-   * CP-073: baris rekap tarif konsumsi harian TERBARU untuk tab "Tarif Konsumsi"
-   * halaman Export Data (sementara TANPA filter & TANPA pagination).
-   * ORDER: tanggal DESC (terbaru di atas), lalu sort_order panel, lalu id —
+   * CP-0XX: COUNT total baris untuk pagination "Tarif Konsumsi".
+   * Tanpa JOIN — FK `.panel_id` → `electricity_panel_iot5.id` menjamin baris valid
+   * (tidak ada orphan dengan FK RESTRICT), jadi count tanpa join aman.
+   * Return: int.
+   */
+  public function tariff_daily_count()
+  {
+    $row = $this->db->query('SELECT COUNT(*) AS `n` FROM `ems_tariff_daily`')->row_array();
+    return ($row === NULL || !isset($row['n'])) ? 0 : (int) $row['n'];
+  }
+
+  /**
+   * CP-0XX: satu halaman baris "Tarif Konsumsi" (mirror range_page).
+   * ORDER: tanggal DESC (terbaru di atas), sort_order panel, id —
    * deterministik pada tanggal sama, aman dijalankan berulang.
-   * LIMIT inline (int): mysqli native prepare menolak `?` untuk LIMIT (pola range_page).
+   * LIMIT/OFFSET inline (int): mysqli native prepare menolak `?` untuk LIMIT
+   * (pola range_page). WAJIB inline, jangan diganti bind param.
    *
-   * @param int $limit Batas baris (default 200 ≈ 66 hari untuk 3 panel)
+   * @param int $per    baris per halaman (>= 1)
+   * @param int $offset offset baris awal (>= 0)
    * @return array rows: tanggal (Y-m-d), panel (nama tampil), kwh_lwbp, kwh_wbp,
    *                biaya_lwbp, biaya_wbp, biaya_total (NULL bila blok tanpa data),
    *                is_final (0=estimasi hari berjalan, 1=final)
    */
-  public function tariff_daily_latest($limit = 200)
+  public function tariff_daily_page($per, $offset)
   {
-    $limit = max(1, (int) $limit);
+    $per    = max(1, (int) $per);
+    $offset = max(0, (int) $offset);
     $sql = "SELECT"
       . " `d`.`tanggal`, `p`.`name` AS `panel`,"
       . " `d`.`kwh_lwbp`, `d`.`kwh_wbp`,"
@@ -466,7 +480,7 @@ class Readings_model extends CI_Model {
       . " FROM `ems_tariff_daily` `d`"
       . " JOIN `electricity_panel_iot5` `p` ON `p`.`id` = `d`.`panel_id`"
       . " ORDER BY `d`.`tanggal` DESC, `p`.`sort_order` ASC, `d`.`id` DESC"
-      . " LIMIT " . $limit;
+      . " LIMIT " . $per . " OFFSET " . $offset;
     return $this->db->query($sql)->result_array();
   }
 

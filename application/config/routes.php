@@ -67,6 +67,7 @@ $route['export-data/download'] = 'ems/export_download';
 $route['export_data'] = 'ems/export_data';
 $route['export'] = 'ems/export_data';
 $route['lvmdp/trend'] = 'ems/lvmdp_trend';
+$route['lvmdp/trend/(:any)'] = 'ems/lvmdp_trend/$1';
 
 // Kompatibilitas URL lama (tetap bisa diakses, tapi sidebar memakai URL pendek).
 $route['ems'] = 'ems/dashboard';
@@ -79,3 +80,4 @@ $route['ems/nagai'] = 'ems/nagai';
 $route['ems/export_data'] = 'ems/export_data';
 $route['ems/export-data'] = 'ems/export_data';
 $route['ems/lvmdp/trend'] = 'ems/lvmdp_trend';
+$route['ems/lvmdp/trend/(:any)'] = 'ems/lvmdp_trend/$1';

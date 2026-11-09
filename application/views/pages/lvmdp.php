@@ -62,11 +62,11 @@ $tarif_num = function ($v, $dec) {
 };
 ?>
 <div id="lvmdp-root"
-  data-ws="<?php echo html_escape(isset($mqtt_ws_url) ? $mqtt_ws_url : 'ws://localhost:8083/mqtt'); ?>"
+  data-ws="<?php echo html_escape(isset($mqtt_ws_url) ? $mqtt_ws_url : 'ws://192.168.51.40:8083/mqtt'); ?>"
   data-topic="<?php echo html_escape(isset($mqtt_topic) ? $mqtt_topic : 'data/ems/lvmdp/+'); ?>"
   data-user="<?php echo html_escape(isset($mqtt_user) ? $mqtt_user : ''); ?>"
   data-pass="<?php echo html_escape(isset($mqtt_pass) ? $mqtt_pass : ''); ?>"
-  data-refresh="<?php echo html_escape(site_url('lvmdp/trend')); ?>"
+  data-refresh="<?php echo html_escape(isset($trend_url) ? $trend_url : site_url('lvmdp/trend')); ?>"
   class="flex flex-col gap-6">
 
   <details class="group rounded-lg border border-ems-line bg-white">

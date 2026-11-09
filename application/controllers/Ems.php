@@ -247,11 +247,12 @@ class Ems extends CI_Controller {
     $this->config->load('ems', TRUE);
     $ems = $this->config->item('ems');
     $extra = array(
-      'mqtt_ws_url' => (is_array($ems) && isset($ems['ems_mqtt_ws_url'])) ? $ems['ems_mqtt_ws_url'] : 'ws://localhost:8083/mqtt',
+      'mqtt_ws_url' => (is_array($ems) && isset($ems['ems_mqtt_ws_url'])) ? $ems['ems_mqtt_ws_url'] : 'ws://192.168.51.40:8083/mqtt',
       'mqtt_topic'  => $mqtt_topic,
       'mqtt_user'   => (is_array($ems) && isset($ems['ems_mqtt_user'])) ? $ems['ems_mqtt_user'] : '',
       'mqtt_pass'   => (is_array($ems) && isset($ems['ems_mqtt_pass'])) ? $ems['ems_mqtt_pass'] : '',
-      'day_payload' => $this->lvmdp_day_payload(),
+      'day_payload' => $this->lvmdp_day_payload($code),
+      'trend_url'   => site_url('lvmdp/trend/' . $code),
       'tarif'       => $this->tarif_kemarin_db($code),   // FASE-T: per-panel
       'tarif7'      => $this->tarif7_harian_db($code),   // FASE-T: per-panel
     );
@@ -266,7 +267,7 @@ class Ems extends CI_Controller {
   // plans/ems-lvmdp-db-trend.md). Skala & refs pindah ke payload (SSR + JS
   // satu kontrak). pts = pair [menitSejak00:00, nilai], HANYA baris non-NULL
   // per kolom; stat dari titik tercatat; peak pakai skema dummy cpx/cpy/x/y/cy.
-  private function lvmdp_day_payload()
+  private function lvmdp_day_payload($code = 'lvmdp')
   {
     $this->load->model('Readings_model');
     $tz    = new DateTimeZone('Asia/Jakarta');
@@ -276,7 +277,7 @@ class Ems extends CI_Controller {
     $tgl_lbl = $today->format('j') . ' ' . $bulan[(int) $today->format('n')] . ' '
              . $today->format('Y') . ' (WIB)';
 
-    $pid  = $this->Readings_model->panel_id_by_code('lvmdp');
+    $pid  = $this->Readings_model->panel_id_by_code($code);
     $rows = ($pid === NULL) ? array() : $this->Readings_model->day_series($pid);
 
     $mken = function ($row) {
@@ -424,7 +425,7 @@ class Ems extends CI_Controller {
     );
   }
 
-  public function lvmdp_trend()
+  public function lvmdp_trend($code = 'lvmdp')
   {
     if ((isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET') !== 'GET') {
       header('Content-Type: application/json; charset=utf-8', TRUE, 405);
@@ -432,9 +433,14 @@ class Ems extends CI_Controller {
       echo json_encode(array('error' => 'method not allowed'));
       exit;
     }
+    if (!in_array($code, array('lvmdp', 'lvmdp2', 'lvmdp3'), TRUE)) {
+      header('Content-Type: application/json; charset=utf-8', TRUE, 404);
+      echo json_encode(array('error' => 'panel not found'));
+      exit;
+    }
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
-    echo json_encode($this->lvmdp_day_payload());
+    echo json_encode($this->lvmdp_day_payload($code));
     exit;
   }
 
@@ -797,9 +803,9 @@ class Ems extends CI_Controller {
   {
     $allowed = array('today', 'week', 'month', 'prev-month', 'custom');
 
-    // CP-073: sub-menu halaman Export Data. 'log' = tabel Historis Pembacaan
+    // CP-073 + CP-0XX: sub-menu halaman Export Data. 'log' = tabel Historis Pembacaan
     // existing (default). 'tarif' = rekap tarif konsumsi harian (ems_tariff_daily)
-    // — sementara TANPA filter & TANPA tombol Export (tabel saja).
+    // — TANPA filter & TANPA tombol Export; pagination 50/halaman (CP-0XX).
     // Whitelist enum; nilai asing/kosong -> 'log' TANPA warning (pola $filter).
     $tab = (string) $this->input->get('tab');
     if (!in_array($tab, array('log', 'tarif'), TRUE)) {
@@ -853,24 +859,42 @@ class Ems extends CI_Controller {
       }
     }
 
-    // 3) Sumber data NYATA (fase 4b): COUNT rentang dulu -> pagination clamp
-    //    -> satu query LIMIT/OFFSET (spec filters §9 — jangan seret semua baris DB ke PHP).
+    // 3) Sumber data — CP-0XX: pagination SIMETRI untuk kedua tab.
+    //    COUNT dulu -> clamp ?page -> satu query LIMIT/OFFSET
+    //    (spec filters §9 — jangan seret semua baris DB ke PHP).
+    //    CP-0XX: saat tab tarif aktif, query COUNT/LIMIT milik Log Data DI-LEWATI
+    //    (menutup item pending minor issue #12).
     $this->load->model('Readings_model');
-    $per   = 50;
-    $total = $this->Readings_model->count_range($from, $to, $panel_id);
+    $per = 50;
+
+    // 3a) COUNT — sumber berbeda per tab.
+    if ($tab === 'tarif') {
+      $total = $this->Readings_model->tariff_daily_count();
+    } else {
+      $total = $this->Readings_model->count_range($from, $to, $panel_id);
+    }
+
+    // 3b) Pagination math — IDENTIK untuk kedua tab (pola CP-013 Log Data).
     $pages = ($total > 0) ? (int) ceil($total / $per) : 1;
     $page  = (int) $this->input->get('page');
     if ($page < 1)      { $page = 1; }
     if ($page > $pages) { $page = $pages; }
     $offset = ($page - 1) * $per;
 
-    // Kontrak 4a-2 dipertahankan: baris shape sama (`time` 'Y-m-d H:i' + `panel` + 12 metrik).
+    // 3c) FETCH satu halaman — shape kolom berbeda per tab:
+    //     log  = `time` 'Y-m-d H:i' + panel + 12 metrik  (kontrak 4a-2, tetap)
+    //     tarif = tanggal + panel + 7 kolom rekap         (CP-073, tetap)
     $rows = array();
     if ($total > 0) {
-      $rows = $this->Readings_model->range_page($from, $to, $per, $offset, $panel_id);
+      if ($tab === 'tarif') {
+        $rows = $this->Readings_model->tariff_daily_page($per, $offset);
+      } else {
+        $rows = $this->Readings_model->range_page($from, $to, $per, $offset, $panel_id);
+      }
     }
 
-    // CP-073: subtitle ikut sub-menu aktif + payload tab/tarif_rows (rekap harian).
+    // CP-073 + CP-0XX: subtitle ikut sub-menu aktif; $rows berisi data tab aktif
+    // (log = pembacaan, tarif = rekap harian) hasil pagination simetris.
     $subtitle = ($tab === 'tarif') ? 'Rekap harian tarif konsumsi listrik per panel' : 'Unduh data historis energi';
     $this->render('export_data', 'export', 'Export Data', $subtitle, array(
       'rows'           => $rows,
@@ -887,7 +911,6 @@ class Ems extends CI_Controller {
       'custom_warning' => $warning,
       'panel_filter'   => ($panel_raw !== '' && in_array($panel_raw, $valid_panels, TRUE)) ? $panel_raw : '',
       'tab'            => $tab,
-      'tarif_rows'     => ($tab === 'tarif') ? $this->Readings_model->tariff_daily_latest(200) : array(),
     ));
   }
 
