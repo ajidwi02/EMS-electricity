@@ -6,7 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= isset($title) ? html_escape($title).' — EMS' : 'EMS — Energy Management System' ?></title>
   <meta name="description" content="EMS — Energy Management System dashboard admin. Minimalist, modern, elegan untuk lingkungan industri.">
-  <link rel="icon" type="image/x-icon" href="<?= base_url('assets/img/smart-energy.ico') ?>">
+  <link id="favicon" rel="icon" type="image/x-icon"
+        href="<?= base_url('assets/img/logo-aoi-b.ico') ?>"
+        data-icon-light="<?= base_url('assets/img/logo-aoi-b.ico') ?>"
+        data-icon-dark="<?= base_url('assets/img/logo-aoi-w.ico') ?>">
+  <script>(function () {
+    'use strict';
+    var l = document.getElementById('favicon');
+    if (!l || !window.matchMedia) return;                       // browser lawas: default terang, 0 error (kontrak #6)
+    var mq = window.matchMedia('(prefers-color-scheme: dark)'); // itu "tema user": OS/browser, bukan app (SS0 Fakta #1)
+    var apply = function () {
+      l.href = mq.matches ? l.getAttribute('data-icon-dark') : l.getAttribute('data-icon-light');
+    };
+    apply();                                                    // sinkron sebelum first paint → tanpa flash icon salah
+    if (mq.addEventListener) { mq.addEventListener('change', apply); } // Chrome/Edge/Firefox/Safari ≥ 14: swap live
+    else if (mq.addListener) { mq.addListener(apply); }         // Safari < 14: swap live juga
+  })();</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
