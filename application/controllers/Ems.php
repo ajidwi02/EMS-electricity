@@ -1283,4 +1283,17 @@ class Ems extends CI_Controller {
     exit;
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // TEST: Korelasi data ems_tariff_daily ↔ data_electricity_iot5
+  // Jalankan: php index.php ems test_tariff_correlation
+  // ═══════════════════════════════════════════════════════════════════
+  public function test_tariff_correlation()
+  {
+    if (!$this->input->is_cli_request()) {
+      show_404();
+      return;
+    }
+    require_once FCPATH . 'tests/test_tariff_correlation.php';
+  }
+
 }
